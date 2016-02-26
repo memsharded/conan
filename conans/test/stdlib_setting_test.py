@@ -54,7 +54,7 @@ class StdlibSettingTest(unittest.TestCase):
         client = TestClient()
         client.save(self.files)
         client.run("export lasote/testing")
-        client.run('install -s os=Linux -s compiler=gcc')
+        client.run('install')
         conaninfo = load(os.path.join(client.current_folder, CONANINFO))
         not_full_settings = conaninfo[:conaninfo.find("[full_settings]")]
         full_settings = conaninfo[conaninfo.find("[full_settings]"):]
@@ -68,7 +68,7 @@ class StdlibSettingTest(unittest.TestCase):
         client = TestClient()
         client.save(self.files)
         client.run("export lasote/testing")
-        client.run('install -s os=Linux -s compiler=gcc', ignore_error=False)
+        client.run('install', ignore_error=False)
         client.run('build')
         self.assertIn("-stdlib=libstdc++", str(client.user_io.out))
         self.assertIn("Found Define: _GLIBCXX_USE_CXX11_ABI=0", str(client.user_io.out))
@@ -79,17 +79,17 @@ class StdlibSettingTest(unittest.TestCase):
         client = TestClient()
         client.save(self.files)
         client.run("export lasote/testing")
-        client.run('install -s stdlib=libstdc++ -s os=Linux -s compiler=gcc', ignore_error=False)
+        client.run('install -s stdlib=libstdc++', ignore_error=False)
         client.run('build')
         self.assertIn("-stdlib=libstdc++", str(client.user_io.out))
         self.assertIn("Found Define: _GLIBCXX_USE_CXX11_ABI=0", str(client.user_io.out))
 
-        client.run('install -s stdlib=libstdc++11 -s os=Linux -s compiler=gcc', ignore_error=False)
+        client.run('install -s stdlib=libstdc++11', ignore_error=False)
         client.run('build')
         self.assertIn("-stdlib=libstdc++", str(client.user_io.out))
         self.assertIn("Found Define: _GLIBCXX_USE_CXX11_ABI=1", str(client.user_io.out))
 
-        client.run('install -s stdlib=libc++ -s os=Linux -s compiler=gcc', ignore_error=False)
+        client.run('install -s stdlib=libc++', ignore_error=False)
         client.run('build')
         self.assertIn("-stdlib=libc++", str(client.user_io.out))
         self.assertNotIn("Found Define: _GLIBCXX_USE_CXX11", str(client.user_io.out))

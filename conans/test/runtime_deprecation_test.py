@@ -56,7 +56,7 @@ class CompilerRuntimeDeprecation(unittest.TestCase):
     def test_using_old_runtime_setting_requiring_new(self):
         self.files["conanfile.py"] = self.files["conanfile.py"].replace('"build_type"', '"build_type", "msvcrt"')
         client = TestClient()
-        conf_path = os.path.join(client.storage_folder, "..", CONAN_CONF)
+        conf_path = client.paths.conan_conf_path
         save(conf_path, load(conf_path).replace("msvcrt=MD", ""))
         client.save(self.files)
         client.run("export lasote/testing")
