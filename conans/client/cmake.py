@@ -114,7 +114,7 @@ class CMake(object):
                 flags.append("-DCMAKE_OSX_ARCHITECTURES=i386")
 
         try:
-            stdlib = self._settings.compiler.stdlib
+            stdlib = self._settings.stdlib
             flags.append('-DCONAN_STDLIB="%s"' % stdlib)
         except:
             pass
@@ -122,10 +122,26 @@ class CMake(object):
 
     @property
     def runtime(self):
+        runtime = ""
+        deprecation_warn = False
+        # Check if exists the old compiler.runtime
         try:
             runtime = self._settings.compiler.runtime
+            if runtime.value:
+                deprecation_warn = True
         except ConanException:
-            return ""
+            pass
+
+        try:
+            runtime = self._settings.msvcrt
+            if runtime.value:
+                deprecation_warn = False
+        except ConanException:
+            pass
+
+        ret = ""
         if runtime:
-            return "-DCONAN_LINK_RUNTIME=/%s" % runtime
-        return ""
+            ret = "-DCONAN_LINK_RUNTIME=/%s" % runtime
+            if deprecation_warn:
+                ret += " -DRUNTIME_DEPRECATION_WARNING=ON"
+        return ret

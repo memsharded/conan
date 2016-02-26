@@ -1,7 +1,6 @@
 import unittest
 from conans.test.tools import TestClient
 from conans.util.files import load, save
-import os
 
 
 class UpdateSettingsYmlTest(unittest.TestCase):
@@ -37,14 +36,14 @@ compiler:
         version: ["3.3", "3.4", "3.5", "3.6", "3.7"]
     apple-clang:
         version: ["5.0", "5.1", "6.0", "6.1", "7.0"]
-
+msvcrt: [MD, MT, MTd, MDd]
 build_type: [None, Debug, Release]
 """
         files = {"conanfile.py": file_content}
         client = TestClient()
         save(client.paths.settings_path, prev_settings)
         conf = load(client.paths.conan_conf_path)
-        conf = conf.replace("compiler.stdlib=None", "")
+        conf = conf.replace("stdlib=libstdc++", "")
         self.assertNotIn("stdlib", conf)
         save(client.paths.conan_conf_path, conf)
         self.assertNotIn("stdlib", client.paths.conan_config.settings_defaults.dumps())
@@ -60,11 +59,11 @@ build_type: [None, Debug, Release]
  
         #Now the new one
         files = {"conanfile.py": file_content}
-        client = TestClient()    
+        client = TestClient()
         client.save(files)
         client.run("export lasote/testing")
         self.assertIn("stdlib", load(client.paths.settings_path))
 
         client.run("install test/1.9@lasote/testing --build -s compiler=gcc "
-                   "-s compiler.version=4.9 -s compiler.stdlib=None -s os=Windows")
+                   "-s compiler.version=4.9 -s stdlib=libstdc++11 -s os=Windows")
         self.assertIn("425ec5c941593abc5ec9394a8eee44bcaa6409d0", client.user_io.out)

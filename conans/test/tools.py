@@ -281,8 +281,6 @@ class TestClient(object):
 
         text += "\ncompiler=%s" % compiler
         text += "\ncompiler.version=%s" % compiler_version
-        if compiler != "Visual Studio":
-            text += "\ncompiler.stdlib=None"
 
         save(self.paths.conan_conf_path, text)
 
