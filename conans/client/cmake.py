@@ -127,13 +127,15 @@ class CMake(object):
         # Check if exists the old compiler.runtime
         try:
             runtime = self._settings.compiler.runtime
-            if runtime:
+            if runtime.value:
                 deprecation_warn = True
         except ConanException:
             pass
 
         try:
             runtime = self._settings.msvcrt
+            if runtime.value:
+                deprecation_warn = False
         except ConanException:
             pass
 

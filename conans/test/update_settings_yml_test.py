@@ -1,7 +1,6 @@
 import unittest
 from conans.test.tools import TestClient
 from conans.util.files import load, save
-import os
 
 
 class UpdateSettingsYmlTest(unittest.TestCase):
@@ -37,7 +36,7 @@ compiler:
         version: ["3.3", "3.4", "3.5", "3.6", "3.7"]
     apple-clang:
         version: ["5.0", "5.1", "6.0", "6.1", "7.0"]
-
+msvcrt: [MD, MT, MTd, MDd]
 build_type: [None, Debug, Release]
 """
         files = {"conanfile.py": file_content}
@@ -60,7 +59,7 @@ build_type: [None, Debug, Release]
  
         #Now the new one
         files = {"conanfile.py": file_content}
-        client = TestClient()    
+        client = TestClient()
         client.save(files)
         client.run("export lasote/testing")
         self.assertIn("stdlib", load(client.paths.settings_path))

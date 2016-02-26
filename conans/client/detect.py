@@ -124,6 +124,8 @@ def _detect_compiler_version_and_libstd(result, output):
         result.append(("compiler", compiler))
         result.append(("compiler.version", version))
         if compiler == "Visual Studio":
+            # TODO: Remove when deprecated
+            result.append(("compiler.runtime", 'MD'))
             result.append(("msvcrt", "MD"))
         elif compiler == "gcc" or "clang" in compiler:
             result.append(("stdlib", "libstdc++"))

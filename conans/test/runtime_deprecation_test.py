@@ -1,8 +1,9 @@
 import unittest
 from conans.test.tools import TestClient
-from conans.util.files import load
+from conans.util.files import load, save
 from conan.conans.paths import CONANINFO
 import os
+from conans.client.paths import CONAN_CONF
 
 
 file_content = '''
@@ -52,9 +53,11 @@ class CompilerRuntimeDeprecation(unittest.TestCase):
         self.assertIn("CMake Warning at conanbuildinfo.cmake", str(client.user_io.out))
         self.assertIn("'compiler.runtime' setting has been deprecated", str(client.user_io.out))
 
-    def test_using_old_runtime_setting_declaring_new(self):
+    def test_using_old_runtime_setting_requiring_new(self):
         self.files["conanfile.py"] = self.files["conanfile.py"].replace('"build_type"', '"build_type", "msvcrt"')
         client = TestClient()
+        conf_path = os.path.join(client.storage_folder, "..", CONAN_CONF)
+        save(conf_path, load(conf_path).replace("msvcrt=MD", ""))
         client.save(self.files)
         client.run("export lasote/testing")
         client.run('install -s compiler="Visual Studio" -s compiler.version="12" -s compiler.runtime="MTd"', ignore_error=True)

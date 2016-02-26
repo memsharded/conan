@@ -295,7 +295,7 @@ class DepsBuilder(object):
                 conanfile.settings.compiler["Visual Studio"].remove("runtime")
             elif "compiler" in conanfile.settings.fields and \
                  "runtime" in conanfile.settings.compiler.fields and \
-                 conanfile.settings.compiler.runtime:
+                 conanfile.settings.compiler.runtime.value:
                 self._output.warn("The 'compiler.runtime' setting has been deprecated and will "
                                   "be removed. Please use 'msvcrt', instead.")
 
