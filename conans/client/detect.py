@@ -113,7 +113,7 @@ def _get_default_compiler(output):
         return gcc or clang
 
 
-def _detect_compiler_version(result, output):
+def _detect_compiler_version_and_libstd(result, output):
     try:
         compiler, version = _get_default_compiler(output)
     except:
@@ -124,9 +124,11 @@ def _detect_compiler_version(result, output):
         result.append(("compiler", compiler))
         result.append(("compiler.version", version))
         if compiler == "Visual Studio":
-            result.append(("compiler.runtime", "MD"))
-        if compiler == "gcc" or "clang" in compiler:
-            result.append(("compiler.stdlib", None))
+            result.append(("msvcrt", "MD"))
+        elif compiler == "gcc" or "clang" in compiler:
+            result.append(("stdlib", "libstdc++"))
+        elif compiler == "apple-clang":
+            result.append(("stdlib", "libc++"))
 
 
 def _detect_os_arch(result, output):
@@ -143,7 +145,7 @@ def _detect_os_arch(result, output):
                 break
         else:
             output.error("Your ARM '%s' architecture is probably not defined in settings.yml\n"
-                        "Please check your conan.conf and settings.yml files" % arch)
+                         "Please check your conan.conf and settings.yml files" % arch)
     result.append(("arch", arch))
 
 
@@ -156,7 +158,7 @@ def detect_defaults_settings(output):
 
     result = []
     _detect_os_arch(result, output)
-    _detect_compiler_version(result, output)
+    _detect_compiler_version_and_libstd(result, output)
     result.append(("build_type", "Release"))
 
     output.writeln("Default conan.conf settings", Color.BRIGHT_YELLOW)

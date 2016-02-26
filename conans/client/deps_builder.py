@@ -153,7 +153,6 @@ class DepsGraph(object):
                     conanfile.requires[nref.name].conan_reference = nref
                 # There might be options that are not upstream
                 conanfile.options.clear_unused(indirect_reqs.union(direct_reqs))
-
                 conanfile.info = ConanInfo.create(conanfile.settings.values,
                                                   conanfile.options.values,
                                                   direct_reqs)
@@ -287,6 +286,18 @@ class DepsBuilder(object):
             conanfile.config()
 
             new_options = conanfile.options.values
+            ######################################
+            # DEPRECATION OF compiler.runtime, if it has no value don't crash
+            ######################################
+            if "compiler" in conanfile.settings.fields and \
+               "runtime" in conanfile.settings.compiler.fields and \
+               "msvcrt" in conanfile.settings.fields:
+                conanfile.settings.compiler["Visual Studio"].remove("runtime")
+            elif "compiler" in conanfile.settings.fields and \
+                 "runtime" in conanfile.settings.compiler.fields and \
+                 conanfile.settings.compiler.runtime:
+                self._output.warn("The 'compiler.runtime' setting has been deprecated and will "
+                                  "be removed. Please use 'msvcrt', instead.")
 
             conanfile.settings.validate()  # All has to be ok!
             conanfile.options.validate()
