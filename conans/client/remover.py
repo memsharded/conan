@@ -48,7 +48,7 @@ class ConanRemover(object):
                     if not src and build_ids is None and package_ids_filter is None:
                         remover.remove(conan_ref)
                         
-        if not self._remote_proxy.remote:
+        if not has_remote:
             delete_empty_dirs(self._file_manager.paths.store)
 
     def _ask_permission(self, conan_ref, src, build_ids, package_ids_filter, force):
