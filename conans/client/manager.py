@@ -180,7 +180,7 @@ class ConanManager(object):
         Printer(self._user_io.out).print_graph(deps_graph, registry)
 
         installer = ConanInstaller(self._paths, self._user_io, remote_proxy)
-        installer.install(deps_graph, build_mode, conanfile)
+        installer.install(deps_graph, build_mode)
 
         if not reference_given:
             if is_txt:
