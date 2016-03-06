@@ -27,6 +27,9 @@ class ConanProxy(object):
         return self._registry.default_remote
 
     def get_package(self, package_reference, force_build):
+        """ obtain a package, either from disk or retrieve from remotes if necessary
+        and not necessary to build
+        """
         output = ScopedOutput(str(package_reference.conan), self._out)
         package_folder = self._paths.package(package_reference)
         # Check if package is corrupted
@@ -44,9 +47,8 @@ class ConanProxy(object):
                 return True
 
             output.info('Package not installed')
-            remote_package = self.retrieve_remote_package(package_reference, output)
-            if remote_package:
-                return True
+            return self._retrieve_remote_package(package_reference, output)
+
         return False
 
     def get_conanfile(self, conan_reference):
@@ -95,17 +97,30 @@ class ConanProxy(object):
             # If exception continue with the next
             except (ConanOutdatedClient, ConanConnectionError) as exc:
                 output.warn(str(exc))
-                if remote == self._remotes[-1]:  # Last element not found
+                if remote == remotes[-1]:  # Last element not found
                     raise ConanConnectionError("All remotes failed")
             except NotFoundException as exc:
-                if remote == self._remotes[-1]:  # Last element not found
+                if remote == remotes[-1]:  # Last element not found
                     logger.debug("Not found in any remote, raising...%s" % exc)
-                    raise
+                    raise NotFoundException("Unable to find '%s' in remotes"
+                                            % str(conan_reference))
 
         raise ConanException("No remote defined")
 
-    def upload_conan(self, conan_reference):  
-        current_remote = self._registry.get_ref(conan_reference) 
+    def upload_conan(self, conan_reference):
+        """ upload to defined remote in (-r=remote), to current remote
+        or to default remote, in that order.
+        If the remote is not set, set it
+        """
+        remote, current_remote = self._get_remote(conan_reference)
+                
+        result = self._remote_manager.upload_conan(conan_reference, remote)
+        if not current_remote:
+            self._registry.set_ref(conan_reference, remote)
+        return result
+
+    def _get_remote(self, conan_ref):
+        current_remote = self._registry.get_ref(conan_ref)
         if self._remote_name:
             remote = self._registry.remote(self._remote_name)
         else:
@@ -113,34 +128,44 @@ class ConanProxy(object):
                 remote = current_remote
             else:
                 remote = self._registry.default_remote
-                
-        result = self._remote_manager.upload_conan(conan_reference, remote)
-        if not current_remote:
-            self._registry.set_ref(conan_reference, remote)
-        return result
+        return remote, current_remote
 
     def upload_package(self, package_reference):
-        remote = self._defined_remote
-        return self._remote_manager.upload_package(package_reference, remote)
+        remote, current_remote = self._get_remote(package_reference.conan)
+
+        if not current_remote:
+            self._out.warn("Remote for '%s' not defined, uploading to %s"
+                           % (str(package_reference.conan), remote.name))
+        result = self._remote_manager.upload_package(package_reference, remote)
+        if not current_remote:
+            self._registry.set_ref(package_reference.conan, remote)
+        return result
 
     def get_conan_digest(self, conan_ref):
         """ used by update to check the date of packages, require force if older
         """
-        remote = self._defined_remote
-        return self._remote_manager.get_conan_digest(conan_ref, remote)
+        remote, current_remote = self._get_remote(conan_ref)
+        result = self._remote_manager.get_conan_digest(conan_ref, remote)
+        if not current_remote:
+            self._registry.set_ref(conan_ref, remote)
+        return result
 
     def search(self, pattern=None, ignorecase=True):
         remote = self._defined_remote
         return self._remote_manager.search(remote, pattern, ignorecase)
 
     def remove(self, conan_ref):
-        remote = self._defined_remote
+        if not self._remote_name:
+            raise ConanException("Cannot remove, remote not defined")
+        remote = self._registry.remote(self._remote_name)    
         result = self._remote_manager.remove(conan_ref, remote)
         self._registry.remove_ref(conan_ref)
         return result
 
     def remove_packages(self, conan_ref, remove_ids):
-        remote = self._defined_remote
+        if not self._remote_name:
+            raise ConanException("Cannot remove, remote not defined")
+        remote = self._registry.remote(self._remote_name)
         return self._remote_manager.remove_packages(conan_ref, remove_ids, remote)
 
     def download_packages(self, reference, package_ids):
@@ -151,16 +176,17 @@ class ConanProxy(object):
         output = ScopedOutput(str(reference), self._out)
         for package_id in package_ids:
             package_reference = PackageReference(reference, package_id)
-            self.retrieve_remote_package(package_reference, output)
+            self._retrieve_remote_package(package_reference, output, remote)
 
-    def retrieve_remote_package(self, package_reference, output):
-        remote = self._registry.get_ref(package_reference.conan)
+    def _retrieve_remote_package(self, package_reference, output, remote=None):
+        if remote is None:
+            remote = self._registry.get_ref(package_reference.conan)
         if not remote:
-            output.warn("Package doesn't have a remote defined")
+            output.error("Package doesn't have a remote defined")
             return
         package_id = str(package_reference.package_id)
         try:
-            output.info("Looking for package %s in remotes" % package_id)
+            output.info("Looking for package %s in remote" % package_id)
             # Will raise if not found NotFoundException
             self._remote_manager.get_package(package_reference, remote)
             output.success('Package installed %s' % package_id)

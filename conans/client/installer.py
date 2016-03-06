@@ -69,14 +69,9 @@ class ConanInstaller(object):
                     break
                 package_id = conan_file.info.package_id()
                 package_reference = PackageReference(conan_ref, package_id)
-                package_folder = self._paths.package(package_reference)
-                if not path_exists(package_folder, self._paths.store):
-                    if not self._force_build(conan_ref, build_mode):  # Not download package
-                        output = ScopedOutput(str(conan_ref), self._out)
-                        output.info('Package not installed')
-                        if not self._remote_proxy.retrieve_remote_package(package_reference,
-                                                                          output):
-                            break
+                force_build = self._force_build(conan_ref, build_mode)
+                if not self._remote_proxy.get_package(package_reference, force_build):
+                    break
             else:
                 skippable_nodes.append(private_node)
         return skippable_nodes

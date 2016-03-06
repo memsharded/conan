@@ -74,6 +74,12 @@ class RemoteRegistry(object):
             remotes, _ = self._load()
             return [Remote(ref, remote) for ref, remote in remotes.iteritems()]
 
+    @property
+    def refs(self):
+        with fasteners.InterProcessLock(self._filename + ".lock"):
+            _, refs = self._load()
+            return refs
+
     def remote(self, name):
         with fasteners.InterProcessLock(self._filename + ".lock"):
             remotes, _ = self._load()
@@ -107,6 +113,28 @@ class RemoteRegistry(object):
             conan_reference = str(conan_reference)
             remotes, refs = self._load()
             refs[conan_reference] = remote.name
+            self._save(remotes, refs)
+
+    def add_ref(self, conan_reference, remote):
+        with fasteners.InterProcessLock(self._filename + ".lock"):
+            conan_reference = str(conan_reference)
+            remotes, refs = self._load()
+            if conan_reference in refs:
+                raise ConanException("%s already exists. Use update" % conan_reference)
+            if remote not in remotes:
+                raise ConanException("%s not in remotes" % remote)
+            refs[conan_reference] = remote
+            self._save(remotes, refs)
+
+    def update_ref(self, conan_reference, remote):
+        with fasteners.InterProcessLock(self._filename + ".lock"):
+            conan_reference = str(conan_reference)
+            remotes, refs = self._load()
+            if conan_reference not in refs:
+                raise ConanException("%s does not exist. Use add" % conan_reference)
+            if remote not in remotes:
+                raise ConanException("%s not in remotes" % remote)
+            refs[conan_reference] = remote
             self._save(remotes, refs)
 
     def add(self, remote_name, remote):

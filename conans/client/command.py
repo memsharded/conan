@@ -26,6 +26,7 @@ from conans.util.files import rmdir, load
 from argparse import RawTextHelpFormatter
 import re
 from conans.client.runner import ConanRunner
+from conans.client.remote_registry import RemoteRegistry
 
 
 class Extender(argparse.Action):
@@ -413,6 +414,54 @@ class Command(object):
 
         self._manager.upload(conan_ref, package_id,
                              args.remote, all_packages=args.all, force=args.force)
+        
+    def remote(self, *args):
+        """ manage remotes
+        """
+        parser = argparse.ArgumentParser(description=self.remote.__doc__, prog="conan remote")
+        subparsers = parser.add_subparsers(dest='subcommand', help='sub-command help')
+
+        # create the parser for the "a" command
+        parser_list = subparsers.add_parser('list', help='list current remotes')
+        parser_add = subparsers.add_parser('add', help='add help')
+        parser_add.add_argument('remote',  help='name of the remote help')
+        parser_add.add_argument('url',  help='name of the remote help')
+        parser_rm = subparsers.add_parser('remove', help='remove help')
+        parser_rm.add_argument('remote',  help='name of the remote help')
+        parser_upd = subparsers.add_parser('update', help='remove help')
+        parser_upd.add_argument('remote',  help='name of the remote')
+        parser_upd.add_argument('url',  help='url')
+        parser_plist = subparsers.add_parser('plist', help='plist current remotes')
+        parser_padd = subparsers.add_parser('padd', help='padd current remotes')
+        parser_padd.add_argument('remote',  help='name of the remote help')
+        parser_padd.add_argument('url',  help='name of the remote help')
+        parser_prm = subparsers.add_parser('premove', help='premove current remotes')
+        parser_prm.add_argument('remote',  help='name of the remote help')
+        parser_pupd = subparsers.add_parser('pupdate', help='pupdate current remotes')
+        parser_pupd.add_argument('remote',  help='name of the remote help')
+        parser_pupd.add_argument('url',  help='name of the remote help')
+        args = parser.parse_args(*args)
+        
+        registry = RemoteRegistry(self._conan_paths.registry, self._user_io.out)
+        if args.subcommand == "list":
+            for r in registry.remotes:
+                self._user_io.out.info("%s: %s" % (r.name, r.url))
+        elif args.subcommand == "add":
+            registry.add(args.remote, args.url)
+        elif args.subcommand == "remove":
+            registry.remove(args.remote)
+        elif args.subcommand == "update":
+            registry.update(args.remote, args.url)
+        elif args.subcommand == "plist":
+            for ref, remote in registry.refs.iteritems():
+                self._user_io.out.info("%s: %s" % (ref, remote))
+        elif args.subcommand == "padd":
+            registry.add_ref(args.remote, args.url)
+        elif args.subcommand == "premove":
+            registry.remove_ref(args.remote)
+        elif args.subcommand == "pupdate":
+            registry.update_ref(args.remote, args.url)
+        
 
     def _show_help(self):
         """ prints a summary of all commands
