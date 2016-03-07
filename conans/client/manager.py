@@ -131,7 +131,7 @@ class ConanManager(object):
             remote_proxy.download_packages(reference, info[reference].keys())
 
     def install(self, reference, current_path, remote=None, options=None, settings=None,
-                build_mode=False, info=None, filename=None):
+                build_mode=False, info=None, filename=None, update=False):
         """ Fetch and build all dependencies for the given reference
         @param reference: ConanFileReference or path to user space conanfile
         @param current_path: where the output files will be saved
@@ -145,7 +145,7 @@ class ConanManager(object):
             reference = None
 
         loader = self._loader(current_path, settings, options)
-        remote_proxy = ConanProxy(self._paths, self._user_io, self._remote_manager, remote)
+        remote_proxy = ConanProxy(self._paths, self._user_io, self._remote_manager, remote, update)
 
         if reference_given:
             project_reference = None
@@ -296,7 +296,8 @@ class ConanManager(object):
                 remote = search on another origin to get packages info
         """
         if remote:
-            info = self._remote_manager.search(pattern, remote, ignorecase)
+            remote_proxy = ConanProxy(self._paths, self._user_io, self._remote_manager, remote)
+            info = remote_proxy.search(pattern, ignorecase)
         else:
             info = self.file_manager.search(pattern, ignorecase)
 

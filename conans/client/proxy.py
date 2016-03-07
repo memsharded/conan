@@ -48,7 +48,7 @@ class ConanProxy(object):
                         if upstream_manifest.time > read_manifest.time:
                             output.warn("Current package is older than remote upstream one")
                             if self._update:
-                                output.warn("Removing it to retrieve or build and updated one")
+                                output.warn("Removing it to retrieve or build an updated one")
                                 rmdir(package_folder)
                         else:
                             output.warn("Current package is newer than remote upstream one")

@@ -170,6 +170,8 @@ class Command(object):
         parser.add_argument("--all", action='store_true', default=False,
                             help='Install all packages from the specified reference')
         parser.add_argument("--file", "-f", help="specify conanfile filename")
+        parser.add_argument("--update", "-u", action='store_true', default=False,
+                            help="update with new upstream packages")
         self._parse_args(parser)
 
         args = parser.parse_args(*args)
@@ -198,7 +200,8 @@ class Command(object):
                                   options=option_dict,
                                   settings=settings_dict,
                                   build_mode=args.build,
-                                  filename=args.file)
+                                  filename=args.file,
+                                  update=args.update)
 
     def info(self, *args):
         """ Prints information about the requirements.

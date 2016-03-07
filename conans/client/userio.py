@@ -37,11 +37,11 @@ class UserIO(object):
             raise ConanException('Cancelled pass %s' % e)
         return username, pwd
 
-    def get_username(self):
+    def get_username(self, remote_name):
         """Overridable for testing purpose"""
         return raw_input()
 
-    def get_password(self):
+    def get_password(self, remote_name):
         """Overridable for testing purpose"""
         return getpass.getpass("")
 
