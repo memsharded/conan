@@ -88,6 +88,20 @@ class RestApiClient(object):
         contents = self.download_files(urls, self._output)
         contents = dict(contents)  # Unroll generator
         return FileTreeManifest.loads(contents[CONAN_MANIFEST])
+    
+    def get_package_digest(self, package_reference):
+        """Gets a FileTreeManifest from conans"""
+
+        # Obtain the URLs
+        url = "%s/conans/%s/packages/%s/digest" % (self._remote_api_url,
+                                                   "/".join(package_reference.conan),
+                                                   package_reference.package_id)
+        urls = self._get_json(url)
+
+        # Get the digest
+        contents = self.download_files(urls, self._output)
+        contents = dict(contents)  # Unroll generator
+        return FileTreeManifest.loads(contents[CONAN_MANIFEST])
 
     def get_conanfile(self, conan_reference):
         """Gets a dict of filename:contents from conans"""

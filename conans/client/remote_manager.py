@@ -44,6 +44,15 @@ class RemoteManager(object):
 
         returns (ConanDigest, remote_name)"""
         return self._call_remote(remote, "get_conan_digest", conan_reference)
+    
+    def get_package_digest(self, package_reference, remote):
+        """
+        Read ConanDigest from remotes
+        Will iterate the remotes to find the conans unless remote was specified
+
+        returns (ConanDigest, remote_name)"""
+        return self._call_remote(remote, "get_package_digest", package_reference)
+
 
     def get_conanfile(self, conan_reference, remote):
         """

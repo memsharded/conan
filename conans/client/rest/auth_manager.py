@@ -138,6 +138,10 @@ class ConanApiAuthManager(object):
         return self._rest_client.get_conan_digest(conan_reference)
 
     @input_credentials_if_unauthorized
+    def get_package_digest(self, package_reference):
+        return self._rest_client.get_package_digest(package_reference)
+
+    @input_credentials_if_unauthorized
     def get_conanfile(self, conan_reference):
         return self._rest_client.get_conanfile(conan_reference)
 
