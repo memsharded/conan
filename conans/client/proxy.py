@@ -13,13 +13,15 @@ class ConanProxy(object):
     getting conanfiles, uploading, removing from remote, etc.
     It uses the RemoteRegistry to control where the packages come from.
     """
-    def __init__(self, paths, user_io, remote_manager, remote_name, update=False):
+    def __init__(self, paths, user_io, remote_manager, remote_name,
+                 update=False, check_updates=True):
         self._paths = paths
         self._out = user_io.out
         self._remote_manager = remote_manager
         self._registry = RemoteRegistry(self._paths.registry, self._out)
         self._remote_name = remote_name
         self._update = update
+        self._check_updates = check_updates
 
     @property
     def _defined_remote(self):
@@ -67,8 +69,8 @@ class ConanProxy(object):
         return False
 
     def get_conanfile(self, conan_reference):
-        output = ScopedOutput(str(conan_reference), self._out)   
- 
+        output = ScopedOutput(str(conan_reference), self._out)
+
         def _refresh():
             conan_dir_path = self._paths.export(conan_reference)
             rmdir(conan_dir_path)
@@ -77,7 +79,6 @@ class ConanProxy(object):
             output.info("Retrieving a fresh conanfile from remotes")
             self._retrieve_conanfile(conan_reference, output)
 
-
         # check if it is in disk
         conanfile_path = self._paths.conanfile(conan_reference)
         if path_exists(conanfile_path, self._paths.store):
@@ -85,24 +86,35 @@ class ConanProxy(object):
             read_manifest, expected_manifest = self._paths.conan_manifests(conan_reference)
             if read_manifest.file_sums != expected_manifest.file_sums:
                 output.warn("Bad conanfile detected! Removing export directory... ")
-                _refresh()         
+                _refresh()
             else:  # Check for updates
-                try:  # get_conan_digest can fail, not in server
-                    upstream_manifest = self.get_conan_digest(conan_reference)
-                    if upstream_manifest.file_sums != read_manifest.file_sums:
-                        if upstream_manifest.time > read_manifest.time:
-                            output.warn("Current conanfile is older than remote upstream one")
-                            if self._update:
-                                _refresh()
-                        else:
-                            output.warn("Current conanfile is newer than remote upstream one")
-                except ConanException:
-                    pass
+                if self._check_updates:
+                    ret = self.update_available(conan_reference)
+                    if ret == 1:
+                        output.warn("There is a new conanfile upstream")
+                        if self._update:
+                            _refresh()
+                    elif ret == -1:
+                        output.warn("Current conanfile is newer than remote upstream one")
         else:
             output.info("Conanfile not found, retrieving from server")
             self._retrieve_conanfile(conan_reference, output)
         return conanfile_path
 
+    def update_available(self, conan_reference):
+        """Returns 0 if the conanfiles are equal, 1 if there is an update and -1 if 
+        the local is newer than the remote"""
+        if not conan_reference:
+            return 0
+        read_manifest, _ = self._paths.conan_manifests(conan_reference)
+        try:  # get_conan_digest can fail, not in server
+            upstream_manifest = self.get_conan_digest(conan_reference)
+            if upstream_manifest.file_sums != read_manifest.file_sums:
+                return 1 if upstream_manifest.time > read_manifest.time else -1
+        except ConanException:
+            pass
+
+        return 0
 
     def _retrieve_conanfile(self, conan_reference, output):
         """ returns the requested conanfile object, retrieving it from

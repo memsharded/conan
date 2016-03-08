@@ -145,7 +145,10 @@ class ConanManager(object):
             reference = None
 
         loader = self._loader(current_path, settings, options)
-        remote_proxy = ConanProxy(self._paths, self._user_io, self._remote_manager, remote, update)
+        # Not check for updates for info command, it'll be checked when dep graph is built
+        check_updates = not info
+        remote_proxy = ConanProxy(self._paths, self._user_io, self._remote_manager,
+                                  remote, update, check_updates)
 
         if reference_given:
             project_reference = None
@@ -175,7 +178,9 @@ class ConanManager(object):
         deps_graph = builder.load(reference, conanfile)
         registry = RemoteRegistry(self._paths.registry, self._user_io.out)
         if info:
-            Printer(self._user_io.out).print_info(deps_graph, project_reference, info, registry)
+            graph_updates_info = builder.get_graph_updates_info(deps_graph)
+            Printer(self._user_io.out).print_info(deps_graph, project_reference, 
+                                                  info, registry, graph_updates_info)
             return
         Printer(self._user_io.out).print_graph(deps_graph, registry)
 
