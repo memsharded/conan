@@ -214,12 +214,16 @@ class Command(object):
                             help='reference name or path to conanfile file, '
                             'e.g., OpenSSL/1.0.2e@lasote/stable or ./my_project/')
         parser.add_argument("--file", "-f", help="specify conanfile filename")
-        self._parse_args(parser)
+        parser.add_argument("-r", "--remote", help='look for in the remote storage')
+        parser.add_argument("--options", "-o",
+                            help='load options to build the package, e.g., -o with_qt=true',
+                            nargs=1, action=Extender)
+        parser.add_argument("--settings", "-s",
+                            help='load settings to build the package, -s compiler:gcc',
+                            nargs=1, action=Extender)
 
         args = parser.parse_args(*args)
 
-        # Get False or a list of patterns to check
-        args.build = self._get_build_sources_parameter(args.build)
         option_dict = args.options or []
         settings_dict = args.settings or []
         current_path = os.getcwd()
@@ -233,7 +237,7 @@ class Command(object):
                               remote=args.remote,
                               options=option_dict,
                               settings=settings_dict,
-                              build_mode=args.build,
+                              build_mode=False,
                               info=True,
                               filename=args.file)
 

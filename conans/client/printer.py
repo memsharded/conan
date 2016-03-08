@@ -36,7 +36,7 @@ class Printer(object):
             ref = PackageReference(ref, conanfile.info.package_id())
             self._out.writeln("    %s" % repr(ref), Color.BRIGHT_CYAN)
 
-    def print_info(self, deps_graph, project_reference, _info, registry):
+    def print_info(self, deps_graph, project_reference, _info, registry, graph_updates_info=None):
         """ Print the dependency information for a conan file
 
             Attributes:
@@ -46,6 +46,7 @@ class Printer(object):
                                        in which case the project itself will not be part
                                        of the printed dependencies.
         """
+        graph_updates_info = graph_updates_info or {}
         for node in sorted(deps_graph.nodes):
             ref, conan = node
             if not ref:
@@ -58,9 +59,11 @@ class Printer(object):
             self._out.writeln("%s" % str(ref), Color.BRIGHT_CYAN)
             remote = registry.get_ref(ref)
             if remote:
+                remote_name = remote.name
                 self._out.writeln("    Remote: %s=%s" % (remote.name, remote.url),
                                   Color.BRIGHT_GREEN)
             else:
+                remote_name = None
                 self._out.writeln("    Remote: None", Color.BRIGHT_GREEN)
             url = getattr(conan, "url", None)
             license_ = getattr(conan, "license", None)
@@ -71,6 +74,13 @@ class Printer(object):
                 self._out.writeln("    License: %s" % license_, Color.BRIGHT_GREEN)
             if author:
                 self._out.writeln("    Author: %s" % author, Color.BRIGHT_GREEN)
+            update = graph_updates_info.get(ref, 0)
+            update_messages = {
+             0: ("You have the latest version (%s)" % remote_name, Color.BRIGHT_GREEN),
+             1: ("There is a newer version (%s)" % remote_name, Color.BRIGHT_YELLOW),
+             -1: ("The local file is newer than remote's one (%s)" % remote_name, Color.BRIGHT_RED)
+            }
+            self._out.writeln("    Updates: %s" % update_messages[update][0], update_messages[update][1])
             dependants = deps_graph.inverse_neighbors(node)
             self._out.writeln("    Required by:", Color.BRIGHT_GREEN)
             for d in dependants:
