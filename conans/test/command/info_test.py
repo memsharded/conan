@@ -45,6 +45,7 @@ class InfoTest(unittest.TestCase):
                 Remote: None
                 URL: myurl
                 License: MIT
+                Updates: You have the latest version (None)
                 Required by:
                 Requires:
                     Hello1/0.1@lasote/stable
@@ -52,12 +53,14 @@ class InfoTest(unittest.TestCase):
                 Remote: None
                 URL: myurl
                 License: MIT
+                Updates: You have the latest version (None)
                 Required by:
                     Hello1/0.1@lasote/stable
             Hello1/0.1@lasote/stable
                 Remote: None
                 URL: myurl
                 License: MIT
+                Updates: You have the latest version (None)
                 Required by:
                     Hello2/0.1@PROJECT
                 Requires:

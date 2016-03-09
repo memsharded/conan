@@ -31,6 +31,7 @@ from conans.client.rest.uploader_downloader import IterableToFileAdapter
 from conans.test.utils.test_files import temp_folder
 from conans.client.remote_registry import RemoteRegistry
 from collections import Counter
+from conans.client.paths import ConanPaths
 
 
 class TestingResponse(object):
@@ -265,17 +266,17 @@ class TestClient(object):
         self.base_folder = base_folder or temp_folder()
         # Define storage_folder, if not, it will be read from conf file & pointed to real user home
         self.storage_folder = os.path.join(self.base_folder, ".conan", "data")
+        self.paths = ConanPaths(self.base_folder, self.storage_folder, TestBufferConanOutput())
+        self.default_settings(get_env("CONAN_COMPILER", "gcc"),
+                              get_env("CONAN_COMPILER_VERSION", "4.8"))
 
-        self.paths = migrate_and_get_paths(self.base_folder, TestBufferConanOutput(),
-                                           storage_folder=self.storage_folder)
+        self.init_dynamic_vars()
+
         save(self.paths.registry, "")
         registry = RemoteRegistry(self.paths.registry, TestBufferConanOutput())
         for name, server in self.servers.iteritems():
             registry.add(name, server.fake_url)
-        
-        self.default_settings(get_env("CONAN_COMPILER", "gcc"),
-                              get_env("CONAN_COMPILER_VERSION", "4.8"))
-        self.init_dynamic_vars()
+
         logger.debug("Client storage = %s" % self.storage_folder)
         self.current_folder = current_folder or temp_folder()
 
@@ -301,16 +302,9 @@ class TestClient(object):
         text = load(self.paths.conan_conf_path)
         return "compiler=Visual Studio" in text
 
-    def init_dynamic_vars(self, user_io=None):
+    def _init_collaborators(self, user_io=None):
 
         output = TestBufferConanOutput()
-
-        # Migration system
-        self.paths = migrate_and_get_paths(self.base_folder, output,
-                                           storage_folder=self.storage_folder)
-
-        
-
         self.user_io = user_io or MockedUserIO(self.users, out=output)
 
         self.runner = TestRunner(output)
@@ -328,7 +322,18 @@ class TestClient(object):
         auth_manager = ConanApiAuthManager(self.rest_api_client, self.user_io, self.localdb)
         # Handle remote connections
         self.remote_manager = RemoteManager(self.paths, auth_manager, self.user_io.out)
-        # self.loader = ConanFileLoader(self.user_io.out, self.runner, self.paths.settings, None)
+
+    def init_dynamic_vars(self, user_io=None):
+
+        self._init_collaborators(user_io)
+
+        # Migration system
+        self.paths = migrate_and_get_paths(self.base_folder, TestBufferConanOutput(),
+                                           manager=self.remote_manager,
+                                           storage_folder=self.storage_folder)
+
+        # Maybe something have changed with migrations
+        self._init_collaborators(user_io)
 
     def run(self, command_line, user_io=None, ignore_error=False):
         """ run a single command as in the command line.

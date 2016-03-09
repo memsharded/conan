@@ -16,7 +16,7 @@ class MultiRemoteTest(unittest.TestCase):
                                      users={"lasote": "mypass"})  # exported users and passwords
             self.servers["remote%d" % i] = test_server
             self.users["remote%d" % i] = [("lasote", "mypass")]
-           
+
         self.client = TestClient(servers=self.servers, users=self.users)
 
     def upload_test(self):
@@ -26,7 +26,7 @@ class MultiRemoteTest(unittest.TestCase):
         self.client.save(files)
         self.client.run("export lasote/stable")
         self.client.run("upload %s" % str(conan_reference))
-        
+
         self.client.run("info %s" % str(conan_reference))
         self.assertIn("remote0=http://", self.client.user_io.out)
         

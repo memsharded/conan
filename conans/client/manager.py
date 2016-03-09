@@ -65,14 +65,13 @@ class ConanManager(object):
                 options = existing_info.full_options  # Take existing options from conaninfo.txt
 
         if user_settings_values:
-            # FIXME: CHapuza
-            aux_values = Values.loads("\n".join(user_settings_values))
+            aux_values = Values.from_list(user_settings_values)
             settings.values = aux_values
 
         if user_options_values is not None:  # Install will pass an empty list []
             # Install OVERWRITES options, existing options in CONANINFO are not taken
             # into account, just those from CONANFILE + user command line
-            options = OptionsValues.loads("\n".join(user_options_values))
+            options = OptionsValues.from_list(user_options_values)
 
         return ConanFileLoader(self._runner, settings, options=options)
 
@@ -136,7 +135,8 @@ class ConanManager(object):
         @param reference: ConanFileReference or path to user space conanfile
         @param current_path: where the output files will be saved
         @param remote: install only from that remote
-        @param options: written in JSON, e.g. {"compiler": "Visual Studio 12", ...}
+        @param options: list of tuples: [(optionname, optionvalue), (optionname, optionvalue)...]
+        @param settings: list of tuples: [(settingname, settingvalue), (settingname, settingvalue)...]
         """
         reference_given = True
         if not isinstance(reference, ConanFileReference):

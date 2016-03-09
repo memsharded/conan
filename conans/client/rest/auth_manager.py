@@ -91,7 +91,7 @@ class ConanApiAuthManager(object):
         self._rest_client = rest_client
         self._localdb = localdb
         self._remote = None
-        
+
     @property
     def remote(self):
         return self._remote
