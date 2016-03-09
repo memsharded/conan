@@ -74,12 +74,6 @@ build_type: [None, Debug, Release]
             if conf.get("os", None) in ("Linux", "Macos") and \
                conf.get("compiler", None) in ("gcc", "clang", "apple-clang"):
 
-                # Read the current remote
-                try:
-                    default_remote = self.paths.conan_config.get_conf("remotes")[0][0]
-                except:
-                    default_remote = "conan.io"
-
                 # Backup the old config and append the new setting
                 config_backup_path = self.paths.conan_conf_path + ".backup"
                 save(config_backup_path, old_conanconf)
@@ -93,27 +87,10 @@ build_type: [None, Debug, Release]
                 self.out.info("- A new conan.conf has been defined")
                 self.out.info("  Your old file has been backup'd to: %s" % config_backup_path)
 
-                # Update all the packages in the storage
-                self.out.info("Updating local packages...")
-                disk_adapter = DiskAdapter("", self.paths.store, None)
-                file_manager = FileManager(self.paths, disk_adapter)
-                results = file_manager.search("*")
-                # Mute the output
-                stream = self.manager._user_io.out._stream
-                # self.manager._user_io.out._stream = StringIO()
-                for conan_reference, values in results.items():
-                    self.out.info("Updating %s" % str(conan_reference))
-                    for _, conaninfo in values.iteritems():
-                        settings = conaninfo.settings.as_list()
-                        options = conaninfo.options.as_list()
-                        current_path = os.getcwd()
-                        try:
-                            self.manager.install(conan_reference, current_path, options=options,
-                                                 settings=settings, update=True, remote=default_remote)
-                        except:
-                            pass
-                # Restore the output
-                self.manager._user_io.out._stream = stream
+                self.out.info("- Reseting storage files...")
+                if os.path.exists(self.store_path):
+                    rmdir(self.store_path)
+
                 # Print information about new setting
                 self.out.warn("{0:s} IMPORTANT {0:s}".format("*" * 30))
                 self.out.warn("Conan 0.8 have a new setting for your compiler: 'compiler.libcxx' ")
@@ -127,6 +104,7 @@ build_type: [None, Debug, Release]
                 self.out.info(" def config(self):")
                 self.out.info("     del self.settings.compiler.libcxx")
                 self.out.info(" ")
+                self.out.warn("Your local storage has been deleted, perform a 'conan install' in your projects to restore them.")
                 self.out.warn("You can read more information about this new setting and how to adapt your packages here: http://blog.conan.io/")
                 self.out.warn("*" * 71)
                 self.out.info("   ")
