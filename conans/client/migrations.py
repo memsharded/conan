@@ -3,12 +3,16 @@ from conans.util.files import rmdir, load, save
 from conans.model.version import Version
 import os
 from conans.client.conf import default_settings_yml
+from conans.server.store.disk_adapter import DiskAdapter
+from conans.server.store.file_manager import FileManager
+from StringIO import StringIO
 
 
 class ClientMigrator(Migrator):
 
-    def __init__(self, paths, current_version, out):
+    def __init__(self, paths, current_version, out, manager):
         self.paths = paths
+        self.manager = manager
         super(ClientMigrator, self).__init__(paths.conan_folder, paths.store,
                                              current_version, out)
 
@@ -58,6 +62,7 @@ build_type: [None, Debug, Release]
                 self.out.warn("*" * 40)
             save(self.paths.settings_path, default_settings_yml)
         elif old_version < Version("0.8"):
+            self.out.info("**** Migrating to conan 0.8 *****")
             settings_backup_path = self.paths.settings_path + ".backup"
             save(settings_backup_path, load(self.paths.settings_path))
             # Save new settings
@@ -65,10 +70,16 @@ build_type: [None, Debug, Release]
             self.out.info("- A new settings.yml has been defined")
             self.out.info("  Your old file has been backup'd to: %s" % settings_backup_path)
 
-            conf = dict(self.paths.conan_config.get_conf("settings_defaults"))
             old_conanconf = load(self.paths.conan_conf_path)
+            conf = dict(self.paths.conan_config.get_conf("settings_defaults"))
             if conf.get("os", None) in ("Linux", "Macos") and \
                conf.get("compiler", None) in ("gcc", "clang", "apple-clang"):
+
+                # Read the current remote
+                try:
+                    default_remote = self.paths.conan_config.get_conf("remotes")[0][0]
+                except:
+                    default_remote = "conan.io"
 
                 # Backup the old config and append the new setting
                 config_backup_path = self.paths.conan_conf_path + ".backup"
@@ -80,9 +91,31 @@ build_type: [None, Debug, Release]
                 with open(self.paths.conan_conf_path, 'wb') as configfile:
                     self.paths.conan_config.write(configfile)
 
-                # Print information about new setting
                 self.out.info("- A new conan.conf has been defined")
                 self.out.info("  Your old file has been backup'd to: %s" % config_backup_path)
+
+                # Update all the packages in the storage
+                self.out.info("Updating local packages...")
+                disk_adapter = DiskAdapter("", self.paths.store, None)
+                file_manager = FileManager(self.paths, disk_adapter)
+                results = file_manager.search("*")
+                # Mute the output
+                stream = self.manager._user_io.out._stream
+                # self.manager._user_io.out._stream = StringIO()
+                for conan_reference, values in results.items():
+                    self.out.info("Updating %s" % str(conan_reference))
+                    for _, conaninfo in values.iteritems():
+                        settings = conaninfo.settings.as_list()
+                        options = conaninfo.options.as_list()
+                        current_path = os.getcwd()
+                        try:
+                            self.manager.install(conan_reference, current_path, options=options,
+                                                 settings=settings, update=True, remote=default_remote)
+                        except:
+                            pass
+                # Restore the output
+                self.manager._user_io.out._stream = stream
+                # Print information about new setting
                 self.out.warn("{0:s} IMPORTANT {0:s}".format("*" * 30))
                 self.out.warn("Conan 0.8 have a new setting for your compiler: 'compiler.libcxx' ")
                 self.out.warn("It defines the Standard C++ Library and it's ABI (C99 or C++11)")

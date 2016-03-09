@@ -86,6 +86,11 @@ class Command(object):
 --build=[pattern]  Build always these packages from source, but never build the others. Allows multiple --build parameters.
 ''')
 
+    def _get_tuples_list_from_extender_arg(self, items):
+        if not items:
+            return None
+        return [(item[0], item[1]) for item in [item.split("=") for item in items]]
+
     def _detect_tested_library_name(self):
         conanfile_content = load(CONANFILE)
         match = re.search('^\s*name\s*=\s*"(.*)"', conanfile_content, re.MULTILINE)
@@ -147,6 +152,9 @@ class Command(object):
         rmdir(build_folder)
         shutil.copytree(test_folder, build_folder)
 
+        options = self._get_tuples_list_from_extender_arg(args.options) or []
+        settings = self._get_tuples_list_from_extender_arg(args.settings) or []
+
         self._manager.install(reference=build_folder,
                               current_path=build_folder,
                               remote=args.remote,
@@ -192,13 +200,14 @@ class Command(object):
         else:  # Classic install, package chosen with settings and options
             # Get False or a list of patterns to check
             args.build = self._get_build_sources_parameter(args.build)
-            option_dict = args.options or []
-            settings_dict = args.settings or []
+            options = self._get_tuples_list_from_extender_arg(args.options) or []
+            settings = self._get_tuples_list_from_extender_arg(args.settings) or []
+
             self._manager.install(reference=reference,
                                   current_path=current_path,
                                   remote=args.remote,
-                                  options=option_dict,
-                                  settings=settings_dict,
+                                  options=options,
+                                  settings=settings,
                                   build_mode=args.build,
                                   filename=args.file,
                                   update=args.update)
@@ -224,8 +233,8 @@ class Command(object):
 
         args = parser.parse_args(*args)
 
-        option_dict = args.options or []
-        settings_dict = args.settings or []
+        options = self._get_tuples_list_from_extender_arg(args.options) or []
+        settings = self._get_tuples_list_from_extender_arg(args.settings) or []
         current_path = os.getcwd()
         try:
             reference = ConanFileReference.loads(args.reference)
@@ -235,8 +244,8 @@ class Command(object):
         self._manager.install(reference=reference,
                               current_path=current_path,
                               remote=args.remote,
-                              options=option_dict,
-                              settings=settings_dict,
+                              options=options,
+                              settings=settings,
                               build_mode=False,
                               info=True,
                               filename=args.file)
@@ -526,12 +535,12 @@ class Command(object):
         return errors
 
 
-def migrate_and_get_paths(base_folder, out, storage_folder=None):
+def migrate_and_get_paths(base_folder, out, manager, storage_folder=None):
     # Init paths
     paths = ConanPaths(base_folder, storage_folder, out)
 
     # Migration system
-    migrator = ClientMigrator(paths, Version(CLIENT_VERSION), out)
+    migrator = ClientMigrator(paths, Version(CLIENT_VERSION), out, manager)
     migrator.migrate()
 
     # Init again paths, migration could change config
@@ -539,10 +548,25 @@ def migrate_and_get_paths(base_folder, out, storage_folder=None):
     return paths
 
 
-def main(args):
-    """ main entry point of the conans application, using a Command to
-    parse parameters
-    """
+def get_command():
+
+    def instance_remote_manager(paths):
+        requester = requests.Session()
+        requester.proxies = paths.conan_config.proxies
+        # Verify client version against remotes
+        version_checker_requester = VersionCheckerRequester(requester, Version(CLIENT_VERSION),
+                                                            Version(MIN_SERVER_COMPATIBLE_VERSION),
+                                                            out)
+        # To handle remote connections
+        rest_api_client = RestApiClient(out, requester=version_checker_requester)
+        # To store user and token
+        localdb = LocalDB(paths.localdb)
+        # Wraps RestApiClient to add authentication support (same interface)
+        auth_manager = ConanApiAuthManager(rest_api_client, user_io, localdb)
+        # Handle remote connections
+        remote_manager = RemoteManager(paths, auth_manager, out)
+        return remote_manager
+
     if hasattr(sys.stdout, "isatty") and sys.stdout.isatty():
         import colorama
         colorama.init()
@@ -555,27 +579,26 @@ def main(args):
     user_folder = os.getenv("CONAN_USER_HOME", os.path.expanduser("~"))
     try:
         # To capture exceptions in conan.conf parsing
-        paths = migrate_and_get_paths(user_folder, out)
+        paths = ConanPaths(user_folder, None, out)
+        # obtain a temp ConanManager instance to execute the migrations
+        remote_manager = instance_remote_manager(paths)
+        manager = ConanManager(paths, user_io, ConanRunner(), remote_manager)
+        paths = migrate_and_get_paths(user_folder, out, manager)
     except Exception as e:
         out.error(str(e))
         sys.exit(True)
 
-    requester = requests.Session()
-    requester.proxies = paths.conan_config.proxies
-    # Verify client version against remotes
-    version_checker_requester = VersionCheckerRequester(requester, Version(CLIENT_VERSION),
-                                                        Version(MIN_SERVER_COMPATIBLE_VERSION),
-                                                        out)
-    # To handle remote connections
-    rest_api_client = RestApiClient(out, requester=version_checker_requester)
-    # To store user and token
-    localdb = LocalDB(paths.localdb)
-    # Wraps RestApiClient to add authentication support (same interface)
-    auth_manager = ConanApiAuthManager(rest_api_client, user_io, localdb)
-    # Handle remote connections
-    remote_manager = RemoteManager(paths, auth_manager, out)
+    # Get the new command instance after migrations have been done
+    manager = instance_remote_manager(paths)
+    command = Command(paths, user_io, ConanRunner(), manager)
+    return command
 
-    command = Command(paths, user_io, ConanRunner(), remote_manager)
+
+def main(args):
+    """ main entry point of the conans application, using a Command to
+    parse parameters
+    """
+    command = get_command()
     current_dir = os.getcwd()
     try:
         import signal

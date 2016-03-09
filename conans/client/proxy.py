@@ -27,6 +27,7 @@ class ConanProxy(object):
     def _defined_remote(self):
         if self._remote_name:
             return self._registry.remote(self._remote_name)
+
         return self._registry.default_remote
 
     def get_package(self, package_reference, force_build):
@@ -64,7 +65,7 @@ class ConanProxy(object):
                 return True
 
             output.info('Package not installed')
-            return self._retrieve_remote_package(package_reference, output)
+            return self._retrieve_remote_package(package_reference, output, remote=self._defined_remote)
 
         return False
 
@@ -154,7 +155,7 @@ class ConanProxy(object):
         If the remote is not set, set it
         """
         remote, current_remote = self._get_remote(conan_reference)
-                
+
         result = self._remote_manager.upload_conan(conan_reference, remote)
         if not current_remote:
             self._registry.set_ref(conan_reference, remote)
@@ -190,7 +191,7 @@ class ConanProxy(object):
         if not current_remote:
             self._registry.set_ref(conan_ref, remote)
         return result
-    
+
     def get_package_digest(self, package_reference):
         """ used by update to check the date of packages, require force if older
         """
@@ -229,6 +230,7 @@ class ConanProxy(object):
             self._retrieve_remote_package(package_reference, output, remote)
 
     def _retrieve_remote_package(self, package_reference, output, remote=None):
+
         if remote is None:
             remote = self._registry.get_ref(package_reference.conan)
         if not remote:
@@ -236,7 +238,7 @@ class ConanProxy(object):
             return
         package_id = str(package_reference.package_id)
         try:
-            output.info("Looking for package %s in remote" % package_id)
+            output.info("Looking for package %s in remote '%s' " % (package_id, remote.name))
             # Will raise if not found NotFoundException
             self._remote_manager.get_package(package_reference, remote)
             output.success('Package installed %s' % package_id)
