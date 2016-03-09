@@ -5,7 +5,6 @@ import os
 from conans.client.conf import default_settings_yml
 from conans.server.store.disk_adapter import DiskAdapter
 from conans.server.store.file_manager import FileManager
-from StringIO import StringIO
 
 
 class ClientMigrator(Migrator):

@@ -88,7 +88,7 @@ class Command(object):
 
     def _get_tuples_list_from_extender_arg(self, items):
         if not items:
-            return None
+            return []
         return [(item[0], item[1]) for item in [item.split("=") for item in items]]
 
     def _detect_tested_library_name(self):
@@ -152,8 +152,8 @@ class Command(object):
         rmdir(build_folder)
         shutil.copytree(test_folder, build_folder)
 
-        options = self._get_tuples_list_from_extender_arg(args.options) or []
-        settings = self._get_tuples_list_from_extender_arg(args.settings) or []
+        options = self._get_tuples_list_from_extender_arg(args.options)
+        settings = self._get_tuples_list_from_extender_arg(args.settings)
 
         self._manager.install(reference=build_folder,
                               current_path=build_folder,
@@ -200,8 +200,8 @@ class Command(object):
         else:  # Classic install, package chosen with settings and options
             # Get False or a list of patterns to check
             args.build = self._get_build_sources_parameter(args.build)
-            options = self._get_tuples_list_from_extender_arg(args.options) or []
-            settings = self._get_tuples_list_from_extender_arg(args.settings) or []
+            options = self._get_tuples_list_from_extender_arg(args.options)
+            settings = self._get_tuples_list_from_extender_arg(args.settings)
 
             self._manager.install(reference=reference,
                                   current_path=current_path,
@@ -233,8 +233,8 @@ class Command(object):
 
         args = parser.parse_args(*args)
 
-        options = self._get_tuples_list_from_extender_arg(args.options) or []
-        settings = self._get_tuples_list_from_extender_arg(args.settings) or []
+        options = self._get_tuples_list_from_extender_arg(args.options)
+        settings = self._get_tuples_list_from_extender_arg(args.settings)
         current_path = os.getcwd()
         try:
             reference = ConanFileReference.loads(args.reference)

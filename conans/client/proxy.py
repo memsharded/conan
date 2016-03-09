@@ -65,7 +65,7 @@ class ConanProxy(object):
                 return True
 
             output.info('Package not installed')
-            return self._retrieve_remote_package(package_reference, output, remote=self._defined_remote)
+            return self._retrieve_remote_package(package_reference, output)
 
         return False
 
@@ -235,7 +235,7 @@ class ConanProxy(object):
             remote = self._registry.get_ref(package_reference.conan)
         if not remote:
             output.error("Package doesn't have a remote defined")
-            return
+            return False
         package_id = str(package_reference.package_id)
         try:
             output.info("Looking for package %s in remote '%s' " % (package_id, remote.name))
