@@ -76,9 +76,10 @@ class ConanProxy(object):
             conan_dir_path = self._paths.export(conan_reference)
             rmdir(conan_dir_path)
             rmdir(self._paths.source(conan_reference))
-            self._registry.remove_ref(conan_reference)
-            output.info("Retrieving a fresh conanfile from remotes")
-            self._retrieve_conanfile(conan_reference, output)
+            current_remote = self._registry.get_ref(conan_reference)
+            output.info("Retrieving a fresh conanfile from remote '%s'" % current_remote.name)
+            self._remote_manager.get_conanfile(conan_reference, current_remote)
+            output.success("Found in remote '%s'" % current_remote.name)
 
         # check if it is in disk
         conanfile_path = self._paths.conanfile(conan_reference)

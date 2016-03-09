@@ -64,6 +64,7 @@ class MultiRemotesTest(unittest.TestCase):
         client_b.run("remote plist")
         self.assertIn("Hello0/0.0@lasote/stable: local", str(client_b.user_io.out))
         client_b.run("install Hello0/0.0@lasote/stable -u")
-        self.assertIn("Hello0/0.0@lasote/stable: Retrieving a fresh conanfile from remotes", str(client_b.user_io.out))
+        self.assertIn("Hello0/0.0@lasote/stable: Retrieving a fresh conanfile from "
+                      "remote 'local'", str(client_b.user_io.out))
         client_b.run("remote plist")
         self.assertIn("Hello0/0.0@lasote/stable: local", str(client_b.user_io.out))

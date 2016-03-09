@@ -38,7 +38,7 @@ class ManifestValidationTest(unittest.TestCase):
         save(file_path, "BAD CONTENT")
 
         self.conan.run("install %s --build missing" % str(self.conan_reference))
-        self.assertIn("%s: Retrieving a fresh conanfile from remotes"
+        self.assertIn("%s: Retrieving a fresh conanfile from remote 'default'"
                       % str(self.conan_reference),
                       self.conan.user_io.out)
 
