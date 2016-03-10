@@ -23,13 +23,6 @@ class ConanProxy(object):
         self._update = update
         self._check_updates = check_updates
 
-    @property
-    def _defined_remote(self):
-        if self._remote_name:
-            return self._registry.remote(self._remote_name)
-
-        return self._registry.default_remote
-
     def get_package(self, package_reference, force_build):
         """ obtain a package, either from disk or retrieve from remotes if necessary
         and not necessary to build
@@ -76,7 +69,7 @@ class ConanProxy(object):
             conan_dir_path = self._paths.export(conan_reference)
             rmdir(conan_dir_path)
             rmdir(self._paths.source(conan_reference))
-            current_remote = self._registry.get_ref(conan_reference)
+            current_remote, _ = self._get_remote(conan_reference)
             output.info("Retrieving a fresh conanfile from remote '%s'" % current_remote.name)
             self._remote_manager.get_conanfile(conan_reference, current_remote)
             output.success("Found in remote '%s'" % current_remote.name)
@@ -155,23 +148,24 @@ class ConanProxy(object):
         or to default remote, in that order.
         If the remote is not set, set it
         """
-        remote, current_remote = self._get_remote(conan_reference)
+        remote, ref_remote = self._get_remote(conan_reference)
 
         result = self._remote_manager.upload_conan(conan_reference, remote)
-        if not current_remote:
+        if not ref_remote:
             self._registry.set_ref(conan_reference, remote)
         return result
 
-    def _get_remote(self, conan_ref):
-        current_remote = self._registry.get_ref(conan_ref)
+    def _get_remote(self, conan_ref=None):
+        # Prioritize -r , then reference registry and then the default remote
+        ref_remote = self._registry.get_ref(conan_ref) if conan_ref else None
         if self._remote_name:
             remote = self._registry.remote(self._remote_name)
         else:
-            if current_remote:
-                remote = current_remote
+            if ref_remote:
+                remote = ref_remote
             else:
                 remote = self._registry.default_remote
-        return remote, current_remote
+        return remote, ref_remote
 
     def upload_package(self, package_reference):
         remote, current_remote = self._get_remote(package_reference.conan)
@@ -196,14 +190,14 @@ class ConanProxy(object):
     def get_package_digest(self, package_reference):
         """ used by update to check the date of packages, require force if older
         """
-        remote, current_remote = self._get_remote(package_reference.conan)
+        remote, ref_remote = self._get_remote(package_reference.conan)
         result = self._remote_manager.get_package_digest(package_reference, remote)
-        if not current_remote:
+        if not ref_remote:
             self._registry.set_ref(package_reference.conan, remote)
         return result
 
     def search(self, pattern=None, ignorecase=True):
-        remote = self._defined_remote
+        remote, _ = self._get_remote()
         return self._remote_manager.search(remote, pattern, ignorecase)
 
     def remove(self, conan_ref):
@@ -222,7 +216,7 @@ class ConanProxy(object):
 
     def download_packages(self, reference, package_ids):
         assert(isinstance(package_ids, list))
-        remote = self._defined_remote
+        remote, _ = self._get_remote(reference)
         self._remote_manager.get_conanfile(reference, remote)
         self._registry.set_ref(reference, remote)
         output = ScopedOutput(str(reference), self._out)
@@ -249,5 +243,5 @@ class ConanProxy(object):
             return False
 
     def authenticate(self, name, password):
-        remote = self._defined_remote
+        remote, _ = self._get_remote()
         return self._remote_manager.authenticate(remote, name, password)

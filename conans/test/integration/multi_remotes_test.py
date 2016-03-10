@@ -68,3 +68,28 @@ class MultiRemotesTest(unittest.TestCase):
                       "remote 'local'", str(client_b.user_io.out))
         client_b.run("remote plist")
         self.assertIn("Hello0/0.0@lasote/stable: local", str(client_b.user_io.out))
+
+        # Upload a new version from client A, but only to the default server (not the plisted)
+        # Upload Hello0 to local and default from client_a
+        sleep(1)  # For timestamp and updates checks
+        self._create(client_a, "Hello0", "0.0", modifier="\n\n")
+        client_a.run("upload Hello0/0.0@lasote/stable -r default")
+
+        # Now client_b checks for updates without -r parameter
+        client_b.run("info Hello0/0.0@lasote/stable")
+        self.assertIn("Remote: local", str(client_b.user_io.out))
+        self.assertIn("You have the latest version (local)", str(client_b.user_io.out))
+
+        # But if we connect to default, should tell us that there is an update IN DEFAULT!
+        client_b.run("info Hello0/0.0@lasote/stable -r default")
+        self.assertIn("Remote: local", str(client_b.user_io.out))
+        self.assertIn("There is a newer version (default)", str(client_b.user_io.out))
+        client_b.run("remote plist")
+        self.assertIn("Hello0/0.0@lasote/stable: local", str(client_b.user_io.out))
+
+        # Well, now try to update the package with -r default -u
+        client_b.run("install Hello0/0.0@lasote/stable -r default -u")
+        self.assertIn("Hello0/0.0@lasote/stable: Retrieving a fresh conanfile from "
+                      "remote 'default'", str(client_b.user_io.out))
+        client_b.run("info Hello0/0.0@lasote/stable")
+        self.assertIn("Updates: The local file is newer than remote's one (local)", str(client_b.user_io.out))

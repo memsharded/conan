@@ -179,8 +179,9 @@ class ConanManager(object):
         registry = RemoteRegistry(self._paths.registry, self._user_io.out)
         if info:
             graph_updates_info = builder.get_graph_updates_info(deps_graph)
-            Printer(self._user_io.out).print_info(deps_graph, project_reference, 
-                                                  info, registry, graph_updates_info)
+            Printer(self._user_io.out).print_info(deps_graph, project_reference,
+                                                  info, registry, graph_updates_info,
+                                                  remote)
             return
         Printer(self._user_io.out).print_graph(deps_graph, registry)
 

@@ -36,7 +36,7 @@ class Printer(object):
             ref = PackageReference(ref, conanfile.info.package_id())
             self._out.writeln("    %s" % repr(ref), Color.BRIGHT_CYAN)
 
-    def print_info(self, deps_graph, project_reference, _info, registry, graph_updates_info=None):
+    def print_info(self, deps_graph, project_reference, _info, registry, graph_updates_info=None, remote=None):
         """ Print the dependency information for a conan file
 
             Attributes:
@@ -45,6 +45,7 @@ class Printer(object):
                                        file for a project on the path. This may be None,
                                        in which case the project itself will not be part
                                        of the printed dependencies.
+                remote: Remote specified in install command. Could be different from the registry one.
         """
         graph_updates_info = graph_updates_info or {}
         for node in sorted(deps_graph.nodes):
@@ -57,14 +58,15 @@ class Printer(object):
                 else:
                     ref = project_reference
             self._out.writeln("%s" % str(ref), Color.BRIGHT_CYAN)
-            remote = registry.get_ref(ref)
-            if remote:
-                remote_name = remote.name
-                self._out.writeln("    Remote: %s=%s" % (remote.name, remote.url),
+            reg_remote = registry.get_ref(ref)
+            if reg_remote:
+                remote_name = remote or reg_remote.name
+                self._out.writeln("    Remote: %s=%s" % (reg_remote.name, reg_remote.url),
                                   Color.BRIGHT_GREEN)
             else:
-                remote_name = None
                 self._out.writeln("    Remote: None", Color.BRIGHT_GREEN)
+                remote_name = remote
+
             url = getattr(conan, "url", None)
             license_ = getattr(conan, "license", None)
             author = getattr(conan, "author", None)
