@@ -89,6 +89,11 @@ class Command(object):
     def _get_tuples_list_from_extender_arg(self, items):
         if not items:
             return []
+        # Validate the pairs
+        for item in items:
+            chunks = item.split("=")
+            if len(chunks) != 2:
+                raise ConanException("Invalid input '%s', use 'name=value'" % item)
         return [(item[0], item[1]) for item in [item.split("=") for item in items]]
 
     def _detect_tested_library_name(self):
