@@ -56,16 +56,15 @@ class MultiRemotesTest(unittest.TestCase):
         client_b.run("info Hello0/0.0@lasote/stable")
         self.assertIn("Updates: There is a newer version (local)", str(client_b.user_io.out))
         client_b.run("install Hello0/0.0@lasote/stable")
-        self.assertIn("There is a new conanfile upstream", str(client_b.user_io.out))
+        self.assertIn("There is a new conanfile in 'local' remote", str(client_b.user_io.out))
         client_b.run("install Hello0/0.0@lasote/stable")
-        self.assertIn("There is a new conanfile upstream", str(client_b.user_io.out))
+        self.assertIn("There is a new conanfile in 'local' remote", str(client_b.user_io.out))
 
         # Now try to update the package with install -u
         client_b.run("remote plist")
         self.assertIn("Hello0/0.0@lasote/stable: local", str(client_b.user_io.out))
-        client_b.run("install Hello0/0.0@lasote/stable -u")
-        self.assertIn("Hello0/0.0@lasote/stable: Retrieving a fresh conanfile from "
-                      "remote 'local'", str(client_b.user_io.out))
+        client_b.run("install Hello0/0.0@lasote/stable -u --build")
+        self.assertIn("Hello0/0.0@lasote/stable: Retrieving from remote 'local'", str(client_b.user_io.out))
         client_b.run("remote plist")
         self.assertIn("Hello0/0.0@lasote/stable: local", str(client_b.user_io.out))
 
@@ -88,8 +87,7 @@ class MultiRemotesTest(unittest.TestCase):
         self.assertIn("Hello0/0.0@lasote/stable: local", str(client_b.user_io.out))
 
         # Well, now try to update the package with -r default -u
-        client_b.run("install Hello0/0.0@lasote/stable -r default -u")
-        self.assertIn("Hello0/0.0@lasote/stable: Retrieving a fresh conanfile from "
-                      "remote 'default'", str(client_b.user_io.out))
+        client_b.run("install Hello0/0.0@lasote/stable -r default -u --build")
+        self.assertIn("Hello0/0.0@lasote/stable: Retrieving from remote 'default'", str(client_b.user_io.out))
         client_b.run("info Hello0/0.0@lasote/stable")
         self.assertIn("Updates: The local file is newer than remote's one (local)", str(client_b.user_io.out))

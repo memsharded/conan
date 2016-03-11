@@ -35,6 +35,7 @@ class Printer(object):
                 continue
             ref = PackageReference(ref, conanfile.info.package_id())
             self._out.writeln("    %s" % repr(ref), Color.BRIGHT_CYAN)
+        self._out.writeln("")
 
     def print_info(self, deps_graph, project_reference, _info, registry, graph_updates_info=None, remote=None):
         """ Print the dependency information for a conan file

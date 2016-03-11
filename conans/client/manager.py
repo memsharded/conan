@@ -196,7 +196,6 @@ class ConanManager(object):
             conanfile.info.full_settings = loader._settings.values
             content = normalize(conanfile.info.dumps())
             save(os.path.join(current_path, CONANINFO), content)
-            self._user_io.out.writeln("")
             output.info("Generated %s" % CONANINFO)
             write_generators(conanfile, current_path, output)
             local_installer = FileImporter(deps_graph, self._paths, current_path)

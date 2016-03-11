@@ -87,7 +87,7 @@ class DefaultNameConan(ConanFile):
         client.run("test")
         self.assertIn('Cannot detect a valid conanfile in current directory', client.user_io.out)
         # It found the package already generated
-        self.assertIn('Hello2/2.2@lasote/stable: Package installed', client.user_io.out)
+        self.assertIn('Hello2/2.2@lasote/stable: Already installed!', client.user_io.out)
 
     def reuse_test(self):
 

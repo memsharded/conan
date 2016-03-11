@@ -25,7 +25,6 @@ class ConanInstaller(object):
         """ given a DepsGraph object, build necessary nodes or retrieve them
         """
         self._deps_graph = deps_graph  # necessary for _build_package
-        self._out.writeln("\nInstalling requirements", Color.BRIGHT_YELLOW)
         nodes_by_level = self._process_buildinfo(deps_graph)
         skip_private_nodes = self._compute_private_nodes(deps_graph, build_mode)
         self._build(nodes_by_level, skip_private_nodes, build_mode)
@@ -112,8 +111,6 @@ class ConanInstaller(object):
         # Compute conan_file package from local (already compiled) or from remote
         output = ScopedOutput(str(conan_ref), self._out)
         package_id = conan_file.info.package_id()
-        self._out.writeln("")
-        output.info("Installing package %s" % package_id)
         package_reference = PackageReference(conan_ref, package_id)
 
         conan_ref = package_reference.conan
@@ -121,6 +118,12 @@ class ConanInstaller(object):
         build_folder = self._paths.build(package_reference)
         src_folder = self._paths.source(conan_ref)
         export_folder = self._paths.export(conan_ref)
+
+        # If already exists do not dirt the output, the common situation
+        # is that package is already installed and OK. If don't, the proxy
+        # will print some other message about it
+        if not os.path.exists(package_folder):
+            output.info("Installing package %s" % package_id)
 
         self._handle_system_requirements(conan_ref, package_reference, conan_file, output)
 
