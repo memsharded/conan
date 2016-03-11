@@ -88,16 +88,22 @@ class ConanProxy(object):
                 if self._check_updates:
                     ret = self.update_available(conan_reference)
                     if ret != 0:  # Found and not equal
-                        remote, _ = self._get_remote(conan_reference)
+                        remote, ref_remote = self._get_remote(conan_reference)
                         if ret == 1:
                             if not self._update:
-                                output.warn("There is a new conanfile in '%s' remote. "
-                                            "Execute 'install -u -r %s' to update it."
-                                            % (remote.name, remote.name))
+                                if remote != ref_remote:  # Forced new remote
+                                    output.warn("There is a new conanfile in '%s' remote. "
+                                                "Execute 'install -u -r %s' to update it."
+                                                % (remote.name, remote.name))
+                                else:
+                                    output.warn("There is a new conanfile in '%s' remote. "
+                                                "Execute 'install -u' to update it."
+                                                % remote.name)
                                 output.warn("Refused to install!")
                             else:
-                                # Delete packages, could be non coherent with new remote
-                                rmdir(self._paths.packages(conan_reference))
+                                if remote != ref_remote:
+                                    # Delete packages, could be non coherent with new remote
+                                    rmdir(self._paths.packages(conan_reference))
                                 _refresh()
                         elif ret == -1:
                             output.error("Current conanfile is newer than %s's one. Remove the local conanfile "\
