@@ -222,6 +222,13 @@ class DepsBuilder(object):
         self._output = output
         self._loader = loader
 
+    def get_graph_updates_info(self, deps_graph):
+        """
+        returns a dict of conan_reference: 1 if there is an update, 0 if don't and -1 if local is newer
+        """
+        return {conan_reference: self._retriever.update_available(conan_reference)
+                for conan_reference, _ in deps_graph.nodes}
+
     def load(self, conan_ref, conanfile):
         """ compute the dependencies graph for:
         param conan_ref: ConanFileReference for installed conanfile or path to user one

@@ -64,7 +64,7 @@ class DownloadTest(unittest.TestCase):
                                      "default")
 
         installer.get_conanfile(conan_ref)
-        installer.retrieve_remote_package(package_ref, TestBufferConanOutput())
+        installer.get_package(package_ref, force_build=False)
 
         reg_path = client2.paths.export(ConanFileReference.loads("Hello/1.2.1/frodo/stable"))
         pack_folder = client2.paths.package(package_ref)
