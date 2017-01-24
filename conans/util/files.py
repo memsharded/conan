@@ -1,6 +1,6 @@
 import os
 import shutil
-from errno import ENOENT, EEXIST
+from errno import ENOENT, EEXIST, ENOTEMPTY
 import hashlib
 import sys
 from os.path import abspath, realpath, join as joinpath
@@ -9,6 +9,7 @@ import re
 import six
 from conans.util.log import logger
 import tarfile
+import time
 
 
 def decode_text(text):
@@ -118,12 +119,19 @@ def _change_permissions(func, path, exc_info):
 def rmdir(path):
     '''Recursive rm of a directory. If dir not exists
     only raise exception if raise_if_not_exist'''
-    try:
-        shutil.rmtree(path, onerror=_change_permissions)
-    except OSError as err:
-        if err.errno == ENOENT:
+    for _ in range(10):  # Max 2 seconds
+        try:
+            shutil.rmtree(path, onerror=_change_permissions)
             return
-        raise
+        except OSError as err:
+            if err.errno == ENOENT:
+                return
+            if err.errno != ENOTEMPTY:
+                with open("conan_fail_removal.txt", "a") as handle:
+                    handle.write("Removal of %s failed, retrying\n" % path)
+                time.sleep(0.2)
+            else:
+                raise
 
 
 def mkdir(path):
