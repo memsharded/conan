@@ -120,7 +120,7 @@ class {package_name}TestConan(ConanFile):
 
     def imports(self):
         self.copy("*.dll", "bin", "bin")
-        self.copy("*.dylib", "bin", "bin")
+        self.copy("*.dylib", "bin", "lib")
 
     def test(self):
         os.chdir("bin")

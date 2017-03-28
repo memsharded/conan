@@ -18,6 +18,7 @@ from conans.client.source import config_source
 from conans.client.generators.env import ConanEnvGenerator
 from conans.tools import environment_append
 from conans.util.tracer import log_package_built
+from conans.client.linters import apply_linters
 
 
 def init_package_info(deps_graph, paths):
@@ -364,6 +365,11 @@ class ConanInstaller(object):
 
         with environment_append(conan_file.env):
             create_package(conan_file, build_folder, package_folder, output)
+            try:
+                linters = self._client_cache.conan_config.get_conf("linters")
+            except ConanException:
+                linters = []
+            apply_linters(conan_file, output, linters)
             self._remote_proxy.handle_package_manifest(package_reference, installed=True)
 
     def _raise_package_not_found_error(self, conan_ref, conan_file):
