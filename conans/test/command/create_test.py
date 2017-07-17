@@ -8,7 +8,10 @@ class CreateTest(unittest.TestCase):
         client = TestClient()
         client.save({"conanfile.py": """from conans import ConanFile
 class MyPkg(ConanFile):
-    pass
+
+    def build(self):
+        assert(self.version=="0.1")
+        assert(self.name=="Pkg")
 """})
         client.run("create Pkg/0.1@lasote/testing")
         self.assertIn("Pkg/0.1@lasote/testing: Generating the package", client.out)

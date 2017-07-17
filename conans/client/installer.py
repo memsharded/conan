@@ -197,6 +197,11 @@ class ConanInstaller(object):
         nodes_to_process = self._get_nodes(nodes_by_level, skip_private_nodes)
 
         for conan_ref, package_id, conan_file, build_needed in nodes_to_process:
+
+            if conan_ref and (not conan_file.version or not conan_file.name):
+                conan_file.version = conan_ref.version
+                conan_file.name = conan_ref.name
+
             if build_needed and (conan_ref, package_id) not in self._built_packages:
                 build_allowed = self._build_mode.allowed(conan_ref, conan_file)
                 if not build_allowed:
