@@ -75,6 +75,7 @@ class FileCopier(object):
         files_to_copy, link_folders = self._filter_files(src, pattern, links, excludes,
                                                          ignore_case)
         copied_files = self._copy_files(files_to_copy, src, dst, keep_path, links)
+        print("Linked folders: %s" % link_folders)
         self._link_folders(src, dst, link_folders)
         self._copied.extend(files_to_copy)
         return copied_files
@@ -92,6 +93,7 @@ class FileCopier(object):
                 continue
 
             if links and os.path.islink(root):
+                print("Root is symlink: %s" % root)
                 linked_folders.append(os.path.relpath(root, src))
                 subfolders[:] = []
                 continue
