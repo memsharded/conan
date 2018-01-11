@@ -23,6 +23,17 @@ class ProfileTest(unittest.TestCase):
         client.run("install . -pr=mylocalprofile")
         self.assertIn("PROJECT: Generated conaninfo.txt", client.out)
 
+    def env_update_test(self):
+        # https://github.com/conan-io/conan/issues/2294
+        client = TestClient()
+        client.run("profile new myprofile --detect")
+        client.run("profile update env.myenv=123 myprofile")
+        client.run("profile show myprofile")
+        self.assertIn("myenv=123", client.out)
+        client.run("profile update env.myenv=234 myprofile")
+        client.run("profile show myprofile")
+        self.assertIn("myenv=234", client.out)
+
     def empty_test(self):
         client = TestClient()
         client.run("profile list")
