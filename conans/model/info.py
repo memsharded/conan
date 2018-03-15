@@ -2,7 +2,7 @@ from conans.client.build.cppstd_flags import cppstd_default
 from conans.errors import ConanException
 from conans.model.env_info import EnvValues
 from conans.model.options import OptionsValues
-from conans.model.ref import PackageReference
+from conans.model.ref import PackageReference, ConanFileReference
 from conans.model.values import Values
 from conans.util.config_parser import ConfigParser
 from conans.util.files import load
@@ -244,6 +244,7 @@ class ConanInfo(object):
         result.options = options.copy()
         result.options.clear_indirect()
         result.full_requires = RequirementsList(requires)
+        result.build_requires = []
         result.requires = RequirementsInfo(requires)
         result.requires.add(indirect_requires)
         result.full_requires.extend(indirect_requires)
@@ -259,13 +260,17 @@ class ConanInfo(object):
     def loads(text):
         parser = ConfigParser(text, ["settings", "full_settings", "options", "full_options",
                                      "requires", "full_requires", "scope", "recipe_hash",
-                                     "env"], raise_unexpected_field=False)
+                                     "env", "build_requires"], raise_unexpected_field=False)
         result = ConanInfo()
         result.settings = Values.loads(parser.settings)
         result.full_settings = Values.loads(parser.full_settings)
         result.options = OptionsValues.loads(parser.options)
         result.full_options = OptionsValues.loads(parser.full_options)
         result.full_requires = RequirementsList.loads(parser.full_requires)
+        try:
+            result.build_requires = [ConanFileReference.loads(line.strip()) for line in parser.build_requires.splitlines()]
+        except:
+            result.build_requires = []
         result.requires = RequirementsInfo(result.full_requires)
         result.recipe_hash = parser.recipe_hash or None
 
@@ -290,6 +295,9 @@ class ConanInfo(object):
         result.append(indent(self.full_settings.dumps()))
         result.append("\n[full_requires]")
         result.append(indent(self.full_requires.dumps()))
+        if self.build_requires:
+            result.append("\n[build_requires]")
+            result.append(indent("\n".join(str(r) for r in self.build_requires)))
         result.append("\n[full_options]")
         result.append(indent(self.full_options.dumps()))
         result.append("\n[recipe_hash]\n%s" % indent(self.recipe_hash))

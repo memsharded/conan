@@ -6,6 +6,7 @@ from conans.client.printer import Printer
 from conans.errors import conanfile_exception_formatter
 from conans.model.ref import ConanFileReference
 from conans.model.conan_file import get_env_context_manager
+from conans.model.info import RequirementsList
 
 
 def _apply_build_requires(deps_graph, conanfile, package_build_requires):
@@ -91,6 +92,9 @@ class BuildRequires(object):
         self._install(conanfile, reference, package_build_requires, installer, profile_build_requires, output)
         self._install(conanfile, reference, new_profile_build_requires, installer, profile_build_requires,
                       output, discard=True)
+        # Need to get the full evaluation
+        new_profile_build_requires.update(package_build_requires)
+        conanfile.info.build_requires = new_profile_build_requires.values()
 
     def _install(self, conanfile, reference, build_requires, installer, profile_build_requires, output,
                  discard=False):
@@ -118,3 +122,4 @@ class BuildRequires(object):
         installer.install(deps_graph, profile_build_requires)
         _apply_build_requires(deps_graph, conanfile, build_requires)
         output.info("Installed build requirements of: %s" % (reference or "PROJECT"))
+        return deps_graph

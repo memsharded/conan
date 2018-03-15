@@ -30,6 +30,7 @@ from conans.model.ref import ConanFileReference, PackageReference
 from conans.paths import CONANFILE, CONANINFO, CONANFILE_TXT, CONAN_MANIFEST, BUILD_INFO
 from conans.util.files import save, rmdir, normalize, mkdir, load
 from conans.util.log import logger
+from conans.model.info import ConanInfo
 
 
 class BuildMode(object):
@@ -126,6 +127,14 @@ class ConanManager(object):
             conanfile = loader.load_conan_txt(conanfile_path, output)
 
         _load_deps_info(info_folder, conanfile, required=deps_info_required)
+        if deps_info_required:
+            conan_info_path = os.path.join(info_folder, CONANINFO)
+            existing_info = ConanInfo.load_file(conan_info_path)
+            conanfile.info = existing_info
+            for r in existing_info.full_requires:
+                conanfile.deps_cpp_info[r.conan.name].version = r.conan.version
+            for r in existing_info.build_requires:
+                conanfile.deps_cpp_info[r.name].version = r.version
 
         return conanfile
 
