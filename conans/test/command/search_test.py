@@ -206,7 +206,7 @@ helloTest/1.4.10@fenix/stable""".format(remote)
         self.assertIn("<h1>Hello/1.4.10@fenix/testing</h1>", html)
         self.assertIn("<td>Linux gcc 4.5 (libstdc++11)</td>", html)
         self.assertIn("<td>Windows Visual Studio 8.1</td>", html)
-        
+
     def search_html_table_all_test(self):
         os.rmdir(self.servers["local"].paths.store)
         shutil.copytree(self.client.paths.store, self.servers["local"].paths.store)
