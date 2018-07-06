@@ -44,6 +44,8 @@ class GraphBinariesAnalyzer(object):
                     output.warn("Current package is newer than remote upstream one")
 
     def _evaluate_node(self, node, build_mode, update, evaluated_references, remote_name):
+        print("Evaluating node ", node.conan_ref, node.conanfile, id(node))
+        print("Binary mode ", node.binary)
         assert node.binary is None
 
         conan_ref, conanfile = node.conan_ref, node.conanfile
@@ -128,6 +130,7 @@ class GraphBinariesAnalyzer(object):
         node.binary_remote = remote
 
     def evaluate_graph(self, deps_graph, build_mode, update, remote_name):
+        print("Evaluating the graph")
         evaluated_references = {}
         for node in deps_graph.nodes:
             if not node.conan_ref:
@@ -135,6 +138,7 @@ class GraphBinariesAnalyzer(object):
 
             private_neighbours = node.private_neighbors()
             if private_neighbours:
+                print("Node has private requirements ", node.conan_ref, node.conanfile, id(node), private_neighbours)
                 self._evaluate_node(node, build_mode, update, evaluated_references, remote_name)
                 if node.binary != BINARY_BUILD:
                     for neigh in private_neighbours:
