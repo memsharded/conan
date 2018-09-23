@@ -20,7 +20,7 @@ import json
 from conans.client.installer import ConanInstaller
 from conans.client.recorder.action_recorder import ActionRecorder
 import time
-from conans.client.serial import unserial_graph
+from conans.client.serial_min import unserial_graph
 
 
 class _RecipeBuildRequires(OrderedDict):

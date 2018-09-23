@@ -52,7 +52,7 @@ from conans.client.graph.proxy import ConanProxy
 from conans.client.graph.python_requires import ConanPythonRequire
 from conans.client.graph.range_resolver import RangeResolver
 import time
-from conans.client.serial import serial_graph, unserial_graph
+from conans.client.serial_min import serial_graph, unserial_graph
 import json
 from conans.model.env_info import EnvValues
 from conans.client.installer import ConanInstaller

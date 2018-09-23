@@ -20,7 +20,7 @@ from conans.util.log import logger
 from conans.client.graph.graph_manager import load_deps_info
 from conans.client.graph.printer import print_graph
 import json
-from conans.client.serial import serial_graph
+from conans.client.serial_min import serial_graph
 
 
 class ConanManager(object):
