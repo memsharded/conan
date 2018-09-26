@@ -4,6 +4,7 @@ import os
 from conans.util.files import load
 import json
 from conans.model.ref import ConanFileReference
+import pprint
 
 
 class CIGraphLockTest(unittest.TestCase):
@@ -30,6 +31,7 @@ class Pkg(ConanFile):
 
         lock_file = os.path.join(client.current_folder, "serial_graph.json")
         lock_graph = json.loads(load(lock_file))
+        print pprint.pprint(lock_graph)
         build_order = lock_graph["build_order"]
 
         for level in build_order:

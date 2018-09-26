@@ -6,6 +6,7 @@ from conans.client.loader import ProcessedProfile
 from conans.model.values import Values
 from conans.model.ref import ConanFileReference
 from conans.model.conan_file import ConanFile
+from conans.model.options import PackageOptionValues, PackageOptionValue
 
 
 def serial_package_option_values(self):
@@ -29,21 +30,24 @@ def serial_conanfile(conanfile):
     return result
 
 
-def unserial_conanfile(conanfile, data, env, settings):
+def unserial_package_option_values(data):
+    result = PackageOptionValues()
+    result._dict = {k: PackageOptionValue(v) for k, v in data.items()}
+    return result
+
+
+def unserial_conanfile(conanfile, data):
     settings_values = unserial_values(data["settings"])
-    settings = settings.copy()
-    settings.values = settings_values
+    conanfile.settings.values = settings_values
     # We are recovering state from captured profile from conaninfo, remove not defined
-    settings.remove_undefined()
-    conanfile.settings = settings
+    conanfile.settings.remove_undefined()
+
     # Same with options
     package_options_values = unserial_package_option_values(data["options"])
+    conanfile.options._package_options.values = package_options_values
 
-
-    conanfile._conan_env_values = env.copy()  # user specified -e
-    
     # COMPUTE INFO
-    
+
     # COMPUTE REQUIRES
 
 
@@ -74,7 +78,7 @@ def serial_node(node):
     return result
 
 
-def unserial_node(data, env, conanfile_path, output, proxy, loader, update=False,
+def unserial_node(data, env, conanfile_path, output, proxy, loader, settings, update=False,
                   scoped_output=None, remote_name=None):
     path = data["path"]
     conan_ref = unserial_ref(data["conan_ref"])
@@ -97,7 +101,8 @@ def unserial_node(data, env, conanfile_path, output, proxy, loader, update=False
             conanfile = loader.load_basic(conanfile_path, output, conan_ref)
     from conans.client.graph.graph import Node
     t1 = time.time()
-    unserial_conanfile(conanfile, data["conanfile"], env)
+    conanfile.initialize(settings, env)
+    unserial_conanfile(conanfile, data["conanfile"])
 
     result = Node(conan_ref, conanfile)
     result.recipe = recipe_status
@@ -116,10 +121,10 @@ def serial_graph(graph):
     return result
 
 
-def unserial_graph(data, env, conanfile_path, output, proxy, loader, scoped_output=None, id_=None):
+def unserial_graph(data, env, conanfile_path, output, proxy, loader, settings, scoped_output=None, id_=None):
     from conans.client.graph.graph import Node, DepsGraph
     result = DepsGraph()
-    nodes_dict = {node_id: unserial_node(n, env, conanfile_path, output, proxy, loader,
+    nodes_dict = {node_id: unserial_node(n, env, conanfile_path, output, proxy, loader, settings,
                                          scoped_output=scoped_output)
                   for node_id, n in data["nodes"].items()}
     result.nodes = set(nodes_dict.values())

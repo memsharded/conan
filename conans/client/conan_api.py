@@ -422,9 +422,10 @@ class ConanAPIV1(object):
     def install_lock(self, lock_graph, node_id):
 
         try:
+            settings = self._client_cache.settings
             recorder = ActionRecorder()
             deps_graph = unserial_graph(lock_graph, EnvValues(), None,
-                                        self._user_io.out, self._proxy, self._loader,
+                                        self._user_io.out, self._proxy, self._loader, settings,
                                         scoped_output=self._user_io.out,
                                         id_=node_id)
             binaries_analyzer = GraphBinariesAnalyzer(self._client_cache, self._user_io.out,
