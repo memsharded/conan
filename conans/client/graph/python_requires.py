@@ -1,7 +1,6 @@
 from collections import namedtuple
 
 from contextlib import contextmanager
-from conans.client.loader import parse_conanfile, parse_module
 from conans.client.recorder.action_recorder import ActionRecorder
 from conans.model.ref import ConanFileReference
 from conans.model.requires import Requirement
