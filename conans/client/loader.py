@@ -42,16 +42,20 @@ class ConanFileLoader(object):
         self._python_requires = python_requires
         sys.modules["conans"].python_requires = python_requires
 
-    def load_class(self, conanfile_path):
-        with self._python_requires.capture_requires() as python_requires:
-            loaded, filename = parse_conanfile(conanfile_path)
+    @staticmethod
+    def load_class_static(python_requires, conanfile_path):
+        with python_requires.capture_requires() as py_requires:
+            module, filename = parse_conanfile(conanfile_path)
+            try:
+                conanfile = parse_module(module, filename)
+                conanfile.python_requires = py_requires
+                return module, conanfile
+            except Exception as e:  # re-raise with file name
+                raise ConanException("%s: %s" % (conanfile_path, str(e)))
 
-        try:
-            conanfile = parse_module(loaded, filename)
-            conanfile.python_requires = python_requires
-            return conanfile
-        except Exception as e:  # re-raise with file name
-            raise ConanException("%s: %s" % (conanfile_path, str(e)))
+    def load_class(self, conanfile_path):
+        module, conanfile = ConanFileLoader.load_class_static(self._python_requires, conanfile_path)
+        return conanfile
 
     def load_export(self, conanfile_path, name, version, user, channel):
         conanfile = self.load_class(conanfile_path)

@@ -1,13 +1,14 @@
 from collections import namedtuple
 
+from contextlib import contextmanager
 from conans.client.loader import parse_conanfile, parse_module
 from conans.client.recorder.action_recorder import ActionRecorder
 from conans.model.ref import ConanFileReference
 from conans.model.requires import Requirement
-from contextlib import contextmanager
+from conans.client.loader import ConanFileLoader
 
 
-PythonRequire = namedtuple("PythonRequire", "conan_ref module")
+PythonRequire = namedtuple("PythonRequire", "conan_ref module conanfile")
 
 
 class ConanPythonRequire(object):
@@ -36,17 +37,15 @@ class ConanPythonRequire(object):
             result = self._proxy.get_recipe(r, False, False, remote_name=None,
                                             recorder=ActionRecorder())
             path, _, _, reference = result
-            with self.capture_requires() as py_requires:
-                module, filename = parse_conanfile(path)
-                module.python_requires = py_requires
+            module, conanfile = ConanFileLoader.load_class_static(python_requires=self,
+                                                                  conanfile_path=path)
 
             # Check for alias
-            conanfile = parse_module(module, filename)
             if getattr(conanfile, "alias", None):
                 # Will register also the aliased
                 python_require = self._look_for_require(conanfile.alias)
             else:
-                python_require = PythonRequire(reference, module)
+                python_require = PythonRequire(reference, module, conanfile)
             self._cached_requires[require] = python_require
 
         return python_require

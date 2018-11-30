@@ -831,3 +831,7 @@ class Project(base_class.PythonRequires2, base_class2.PythonRequires22):
         #   - packages
         self.assertIn("    project/1.0@jgsogo/test:5ab84d6acfe1f23c4fae0ab88f26e3a396351ac9 - Build",
                       client.out)
+
+        #   - no mention to alias
+        self.assertNotIn("alias", client.out)
+        self.assertNotIn("alias2", client.out)
