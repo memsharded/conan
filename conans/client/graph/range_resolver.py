@@ -8,47 +8,23 @@ from conans.search.search import search_recipes
 re_param = re.compile(r"^(?P<function>include_prerelease|loose)\s*=\s*(?P<value>True|False)$")
 re_version = re.compile(r"^((?!(include_prerelease|loose))[a-zA-Z0-9_+.\-~<>=|*^\(\)\s])*$")
 
+loose_pattern = re.compile(r"loose\s*=\s*(True|False)")
+pre_pattern = re.compile(r"include_prerelease\s*=\s*(True|False)")
+
 
 def _parse_versionexpr(versionexpr, output):
-    expression = [it.strip() for it in versionexpr.split(",")]
-    if len(expression) > 4:
-        raise ConanException("Invalid expression for version_range '{}'".format(versionexpr))
+    loose = loose_pattern.search(versionexpr)
+    loose = (loose.group(1) == "True") if loose else True
+    versionexpr = loose_pattern.sub("", versionexpr)
+    include_prerelease = pre_pattern.search(versionexpr)
+    include_prerelease = (include_prerelease.group(1) == "True") if include_prerelease else False
+    versionexpr = pre_pattern.sub("", versionexpr)
 
-    include_prerelease = False
-    loose = True
-    version_range = []
-
-    for i, expr in enumerate(expression):
-        match_param = re_param.match(expr)
-        match_version = re_version.match(expr)
-
-        if match_param == match_version:
-            raise ConanException("Invalid version range '{}', failed in "
-                                 "chunk '{}'".format(versionexpr, expr))
-
-        if match_version and i not in [0, 1]:
-            raise ConanException("Invalid version range '{}'".format(versionexpr))
-
-        if match_param and i not in [1, 2, 3]:
-            raise ConanException("Invalid version range '{}'".format(versionexpr))
-
-        if match_version:
-            version_range.append(expr)
-
-        if match_param:
-            if match_param.group('function') == 'loose':
-                loose = match_param.group('value') == "True"
-            elif match_param.group('function') == 'include_prerelease':
-                include_prerelease = match_param.group('value') == "True"
-            else:
-                raise ConanException("Unexpected version range "
-                                     "parameter '{}'".format(match_param.group(1)))
-
-    if len(version_range) > 1:
-        output.warn("Commas as separator in version '%s' range will are deprecated and will be removed in Conan 2.0" %
-                    str(versionexpr))
-
-    version_range = " ".join(map(str, version_range))
+    version_range = versionexpr.strip(", ")
+    if "," in version_range:
+        output.warn("Commas as separator in version '%s' range will are deprecated "
+                    "and will be removed in Conan 2.0" % version_range)
+    version_range = version_range.replace(",", " ")
     return version_range, loose, include_prerelease
 
 
