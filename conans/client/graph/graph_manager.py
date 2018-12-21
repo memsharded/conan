@@ -143,9 +143,6 @@ class GraphManager(object):
             root_node = Node(conan_ref, conanfile, recipe=RECIPE_VIRTUAL)
             root_node.id = graph_lock_root_node
         else:
-            if graph_lock:
-                graph_lock_ root_node = graph_lock.get_node_from_ref(None)
-
             if reference.endswith(".py"):
                 test = str(create_reference) if create_reference else None
                 conanfile = self._loader.load_consumer(reference, processed_profile, test=test)
@@ -155,6 +152,8 @@ class GraphManager(object):
                                                validate=False)
             else:
                 conanfile = self._loader.load_conanfile_txt(reference, processed_profile)
+            if graph_lock:
+                graph_lock_root_node = graph_lock.get_node_from_ref(None)
             root_node = Node(conan_ref, conanfile, recipe=RECIPE_CONSUMER)
             root_node.id = graph_lock_root_node
 

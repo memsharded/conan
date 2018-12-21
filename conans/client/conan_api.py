@@ -383,6 +383,10 @@ class ConanAPIV1(object):
                 # Capture the output to remove range_resolver resolution messages for python_requires
                 self._graph_manager._resolver.output
 
+            conanfile = self._loader.load_export(conanfile_path, name, version, user, channel)
+            reference = ConanFileReference(conanfile.name, conanfile.version, conanfile.user,
+                                           conanfile.channel)
+
             # Make sure keep_source is set for keep_build
             keep_source = keep_source or keep_build
             # Forcing an export!
