@@ -371,9 +371,7 @@ class ConanAPIV1(object):
 
             graph_lock = graph_info.graph_lock
             if graph_lock:
-                node = graph_lock.get_node_from_ref(reference)
-                if node is None:
-                    node = graph_lock.get_node_from_ref(None)
+                node = graph_lock.get_node_from_ref(reference, allow_root=True)
                 python_requires = graph_lock.python_requires(node)
             else:
                 python_requires = None
@@ -630,9 +628,9 @@ class ConanAPIV1(object):
                                                 settings, options, env, input_graph_info)
 
         recorder = ActionRecorder()
-        deps_graph, _, _ = self._graph_manager.load_graph(reference, None, graph_info, ["missing"],
-                                                          check_updates, False, remote_name,
-                                                          recorder, workspace=None)
+        deps_graph, _ = self._graph_manager.load_graph(reference, None, graph_info, ["missing"],
+                                                       check_updates, False, remote_name,
+                                                       recorder, workspace=None)
         if input_graph_info:
             graph_lock = graph_info.graph_lock
             build_order = graph_lock.build_order(node_id=None)
@@ -651,10 +649,10 @@ class ConanAPIV1(object):
                                                 settings, options, env, input_graph_info)
 
         recorder = ActionRecorder()
-        deps_graph, conanfile, _ = self._graph_manager.load_graph(reference, None, graph_info,
-                                                                  build_modes, check_updates,
-                                                                  False, remote_name, recorder,
-                                                                  workspace=None)
+        deps_graph, conanfile = self._graph_manager.load_graph(reference, None, graph_info,
+                                                               build_modes, check_updates,
+                                                               False, remote_name, recorder,
+                                                               workspace=None)
         nodes_to_build = deps_graph.nodes_to_build()
         return nodes_to_build, conanfile
 
@@ -666,9 +664,9 @@ class ConanAPIV1(object):
                                                 settings, options, env, input_graph_info)
 
         recorder = ActionRecorder()
-        deps_graph, conanfile, _ = self._graph_manager.load_graph(reference, None, graph_info, build,
-                                                                  update, False, remote_name,
-                                                                  recorder, workspace=None)
+        deps_graph, conanfile = self._graph_manager.load_graph(reference, None, graph_info, build,
+                                                               update, False, remote_name,
+                                                               recorder, workspace=None)
         if output_graph_info:
             output_graph_info = _make_abs_path(output_graph_info, get_cwd())
             self._user_io.out.info("Saving graph-info file: %s" % output_graph_info)

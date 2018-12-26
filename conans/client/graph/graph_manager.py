@@ -8,7 +8,7 @@ from conans.client.graph.graph import BINARY_BUILD, BINARY_WORKSPACE, Node,\
     RECIPE_CONSUMER, RECIPE_VIRTUAL
 from conans.client.graph.graph_binaries import GraphBinariesAnalyzer
 from conans.client.graph.graph_builder import DepsGraphBuilder
-from conans.client.graph.graph_lock_builder import DepsGraphLockBuilder, GraphLockNode
+from conans.client.graph.graph_lock_builder import DepsGraphLockBuilder
 from conans.client.loader import ProcessedProfile
 from conans.errors import ConanException, conanfile_exception_formatter
 from conans.model.conan_file import get_env_context_manager
@@ -115,33 +115,18 @@ class GraphManager(object):
             conanfile._conan_channel = reference.channel
 
         # Computing the full dependency graph
-        graph_lock_root_node = None
-
         profile = graph_info.profile
         graph_lock = graph_info.graph_lock
-        cache_settings = profile.processed_settings
         processed_profile = ProcessedProfile(profile, create_reference)
         conan_ref = None
         if isinstance(reference, list):  # Install workspace with multiple root nodes
             conanfile = self._loader.load_virtual(reference, processed_profile)
             root_node = Node(conan_ref, conanfile, recipe=RECIPE_VIRTUAL)
         elif isinstance(reference, ConanFileReference):
-            if graph_lock:
-                graph_lock_node_id = graph_lock.get_node_from_ref(reference)
-                # If we are creating, the root, virtual node is None, and the create_reference
-                # Might not be there
-                if graph_lock_node_id is None and reference:
-                    graph_lock_node_id = graph_lock.get_node_from_ref(None)
-                    node = graph_lock._nodes[graph_lock_node_id]
-                    graph_lock._nodes[graph_lock_node_id] = GraphLockNode(reference,
-                                                                          node.binary_id,
-                                                                          node.options_values,
-                                                                          node.dependencies,
-                                                                          [])
-                graph_lock_root_node = graph_lock.insert_virtual([graph_lock_node_id])
             conanfile = self._loader.load_virtual([reference], processed_profile)
             root_node = Node(conan_ref, conanfile, recipe=RECIPE_VIRTUAL)
-            root_node.id = graph_lock_root_node
+            if graph_lock:
+                graph_lock.insert_node(root_node, reference)
         else:
             if reference.endswith(".py"):
                 test = str(create_reference) if create_reference else None
@@ -152,10 +137,9 @@ class GraphManager(object):
                                                validate=False)
             else:
                 conanfile = self._loader.load_conanfile_txt(reference, processed_profile)
-            if graph_lock:
-                graph_lock_root_node = graph_lock.get_node_from_ref(None)
             root_node = Node(conan_ref, conanfile, recipe=RECIPE_CONSUMER)
-            root_node.id = graph_lock_root_node
+            if graph_lock:
+                graph_lock.insert_node(root_node, create_reference)
 
         build_mode = BuildMode(build_mode, self._output)
         deps_graph = self._load_graph(root_node, check_updates, update,
@@ -177,7 +161,7 @@ class GraphManager(object):
             self._output.writeln("")
 
         build_mode.report_matches()
-        return deps_graph, conanfile, cache_settings
+        return deps_graph, conanfile
 
     @staticmethod
     def _get_recipe_build_requires(conanfile):
@@ -265,7 +249,7 @@ class GraphManager(object):
                 virtual_conanfile = self._loader.load_virtual(build_requires.values(),
                                                               processed_profile,
                                                               scope_options=False)
-                virtual_node = Node(None, virtual_conanfile)
+                virtual_node = Node(None, virtual_conanfile, RECIPE_VIRTUAL)
                 virtual_node.id = graph_lock_root_node
                 build_requires_graph = self._load_graph(virtual_node, check_updates, update,
                                                         build_mode, remote_name,

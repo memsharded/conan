@@ -1,8 +1,8 @@
 from collections import defaultdict
 from collections import namedtuple
 
-from conans.client.graph.graph import DepsGraph, Node
-from conans.client.output import ScopedOutput
+from conans.client.graph.graph import DepsGraph, Node, RECIPE_VIRTUAL,\
+    RECIPE_CONSUMER
 from conans.errors import (ConanException, conanfile_exception_formatter,
                            ConanExceptionInUserConanfileMethod)
 from conans.model.conan_file import get_env_context_manager
@@ -35,6 +35,21 @@ class GraphLock(object):
             self._nodes[node.id] = GraphLockNode(conan_ref, binary_id, options_values, dependencies,
                                                  python_requires)
 
+    def insert_node(self, node, reference):
+        # search by reference
+        if node.recipe == RECIPE_VIRTUAL:
+            graph_lock_node_id = self.get_node_from_ref(reference)
+            graph_lock_root_node = self.insert_virtual([graph_lock_node_id])
+        elif node.recipe == RECIPE_CONSUMER:
+            if reference:  # This is create_reference: test_package/conanfile -> tested ref
+                graph_lock_node_id = self.get_node_from_ref(reference)
+                node = self._nodes[graph_lock_node_id]
+                graph_lock_root_node = self.insert_virtual([graph_lock_node_id])
+            else:  # A normal "conan install", captures its incomplete reference
+                graph_lock_root_node = self.get_node_from_ref(node.conan_ref, allow_root=True)
+
+        node.id = graph_lock_root_node
+
     def insert_virtual(self, node_ids):
         new_node = GraphLockNode(None, None, OptionsValues(),
                                  [GraphLockDependency(node_id, False, False)
@@ -43,11 +58,20 @@ class GraphLock(object):
         self._nodes[id_] = new_node
         return id_
 
-    def get_node_from_ref(self, conan_ref):
+    def get_node_from_ref(self, conan_ref, allow_root=False):
+        existing = []
         for id_, node in self._nodes.items():
+            existing.append(node.conan_ref)
             # Find it even if there are revisions
             if str(node.conan_ref) == str(conan_ref):
                 return id_
+        if allow_root:
+            # FIXME: Very crappy implementation
+            for id_, node in self._nodes.items():
+                # Find it even if there are revisions
+                if "None" in str(node.conan_ref):
+                    return id_
+        raise ConanException("Node %s not found in graph lock: %s" % (str(conan_ref), existing))
 
     def build_order(self, node_id):
         inverse_neighbors = defaultdict(set)
@@ -242,10 +266,9 @@ class DepsGraphLockBuilder(object):
             raise e
         conanfile_path, recipe_status, remote, _ = result
 
-        output = ScopedOutput(str(reference), self._output)
         with self._loader.lock_versions(python_requires):
-            dep_conanfile = self._loader.load_conanfile(conanfile_path, output, processed_profile,
-                                                        reference=reference)
+            dep_conanfile = self._loader.load_conanfile(conanfile_path, processed_profile,
+                                                        ref=reference)
 
         new_node = Node(reference, dep_conanfile)
         new_node.recipe = recipe_status
