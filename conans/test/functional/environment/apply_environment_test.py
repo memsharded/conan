@@ -12,9 +12,40 @@ from conans.paths import BUILD_INFO, CONANFILE, CONANINFO
 from conans.test.utils.cpp_test_files import cpp_hello_conan_files
 from conans.test.utils.tools import TestClient
 from conans.util.files import load
+from textwrap import dedent
 
 
 class ConanEnvTest(unittest.TestCase):
+
+    def test_environment_from_profile_build_requires(self):
+        client = TestClient()
+        build_require = dedent("""
+            from conans import ConanFile
+            class TestConan(ConanFile):
+                def package_info(self):
+                    self.env_info.CXXFLAGS = ["-isystem /None"]
+            """)
+        conanfile = dedent("""
+            from conans import ConanFile
+            from conans.tools import load
+            import os
+
+            class TestConan(ConanFile):
+                build_requires = "build_req/0.1.0@user/test"
+
+                def build(self):
+                    self.output.info("ENV CXXFLAGS: %s" % os.getenv("CXXFLAGS"))
+            """)
+        profile = dedent("""
+            [env]
+            CXXFLAGS=[-Inot_existing]
+            """)
+        client.save({"build_require.py": build_require,
+                     "conanfile.py": conanfile,
+                     "profile": profile})
+        client.run("create build_require.py build_req/0.1.0@user/test")
+        client.run("create . pkg/0.1.0@user/test -pr=profile")
+        self.assertIn("ENV CXXFLAGS: -Inot_existing;-isystem /None", client.out)
 
     @attr('slow')
     def shared_in_current_directory_test(self):
