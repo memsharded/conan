@@ -6,6 +6,7 @@ from collections import OrderedDict
 from conans.test.utils.tools import NO_SETTINGS_PACKAGE_ID, TestClient, TestServer
 from conans.util.files import load
 from conans.model.ref import ConanFileReference
+from conans.test.utils.conanfile import TestConanFile
 
 
 class RemoteTest(unittest.TestCase):
@@ -20,6 +21,20 @@ class RemoteTest(unittest.TestCase):
 
         self.client = TestClient(servers=self.servers, users=self.users)
 
+    def test_remote_remove(self):
+        # https://github.com/conan-io/conan/issues/5281
+        self.client.save({"conanfile.py": TestConanFile("Hello", "0.1")})
+        self.client.run("create . lasote/testing")
+        self.client.run("upload * --all -r=remote1 --confirm")
+        ref = ConanFileReference.loads("Hello/0.1@lasote/testing")
+        metadata = self.client.cache.package_layout(ref).load_metadata()
+        self.assertEqual(metadata.recipe.remote, "remote1")
+        self.assertEqual(metadata.packages["5ab84d6acfe1f23c4fae0ab88f26e3a396351ac9"].remote, "remote1")
+        self.client.run("remote remove remote1")
+        metadata = self.client.cache.package_layout(ref).load_metadata()
+        self.assertEqual(metadata.recipe.remote, None)
+        self.assertEqual(metadata.packages["5ab84d6acfe1f23c4fae0ab88f26e3a396351ac9"].remote, None)
+        
     def test_removed_references(self):
         conanfile = """
 from conans import ConanFile
