@@ -63,7 +63,7 @@ class ClientCache(object):
     """
 
     def __init__(self, base_folder, output):
-        self.cache_folder = base_folder
+        self.cache_folder = os.path.join(base_folder, ".conan")
         self._output = output
 
         # Caching

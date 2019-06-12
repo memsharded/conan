@@ -151,10 +151,11 @@ default_package_id_mode = semver_direct_mode # environment CONAN_DEFAULT_PACKAGE
 # cacert_path                         # environment CONAN_CACERT_PATH
 
 [storage]
-# This is the default path, but you can write your own. It must be an absolute path or a
+# This is the default path, but you can write your own. It can be an absolute path or a
 # path beginning with "~" (if the environment var CONAN_USER_HOME is specified, this directory, even
 # with "~/", will be relative to the conan user home, not to the system user home)
-path = ./data
+# It can also be a relative path like "path = ./data"
+path = ~/.conan/data
 
 [proxies]
 # Empty section will try to use system proxies.
@@ -422,6 +423,8 @@ class ConanClientConfigParser(ConfigParser, object):
                 elif result[:2] == "~/":
                     if env_conan_user_home:
                         result = os.path.join(env_conan_user_home, result[2:])
+                    else:
+                        result = os.path.join(current_dir, result[2:])
             except (KeyError, ConanException):  # If storage not defined, to return None
                 pass
 

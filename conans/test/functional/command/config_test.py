@@ -18,10 +18,10 @@ class ConfigTest(unittest.TestCase):
     def storage_test(self):
         # show the full file
         self.client.run("config get storage")
-        self.assertIn("path = ./data", self.client.user_io.out)
+        self.assertIn("path = ~/.conan/data", self.client.user_io.out)
 
         self.client.run("config get storage.path")
-        self.assertIn("./data", self.client.user_io.out)
+        self.assertIn("~/.conan/data", self.client.user_io.out)
         self.assertNotIn("path:", self.client.user_io.out)
 
     def errors_test(self):
