@@ -1,8 +1,9 @@
+import os
+
 from conans.client.graph.graph import BINARY_BUILD, BINARY_CACHE, BINARY_DOWNLOAD, BINARY_MISSING, \
     BINARY_UPDATE
 from conans.client.installer import build_id
 from conans.util.files import save
-import os
 
 
 class ConanGrapher(object):
@@ -63,6 +64,8 @@ class ConanHTMLGrapher(object):
                                ("author", conanfile.author),
                                ("topics", str(conanfile.topics))]:
                 if data:
+                    if isinstance(data, (tuple, list)):
+                        data = ', '.join(data)
                     data = data.replace("'", '"')
                     fulllabel.append("<li><b>%s</b>: %s</li>" % (name, data))
 

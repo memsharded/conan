@@ -20,12 +20,12 @@ def undo_imports(current_path, output):
     manifest_path = os.path.join(current_path, IMPORTS_MANIFESTS)
     try:
         manifest_content = load(manifest_path)
-    except:
+    except Exception:
         raise ConanException("Cannot load file %s" % manifest_path)
 
     try:
         manifest = FileTreeManifest.loads(manifest_content)
-    except:
+    except Exception:
         raise ConanException("Wrong manifest file format %s" % manifest_path)
 
     not_removed = 0
@@ -36,7 +36,7 @@ def undo_imports(current_path, output):
             continue
         try:
             os.remove(filepath)
-        except:
+        except Exception:
             output.error("Cannot remove file (open or busy): %s" % filepath)
             not_removed += 1
 
@@ -47,7 +47,7 @@ def undo_imports(current_path, output):
     try:
         os.remove(manifest_path)
         output.success("Removed imports manifest file: %s" % manifest_path)
-    except:
+    except Exception:
         raise ConanException("Cannot remove manifest file (open or busy): %s" % manifest_path)
 
 
@@ -104,7 +104,7 @@ def run_deploy(conanfile, install_folder):
     # This is necessary to capture FileCopier full destination paths
     # Maybe could be improved in FileCopier
     def file_copier(*args, **kwargs):
-        file_copy = FileCopier(conanfile.package_folder, install_folder)
+        file_copy = FileCopier([conanfile.package_folder], install_folder)
         copied = file_copy(*args, **kwargs)
         _make_files_writable(copied)
         package_copied.update(copied)
@@ -155,7 +155,7 @@ class _FileImporter(object):
         matching_paths = self._get_folders(root_package)
         for name, matching_path in matching_paths.items():
             final_dst_path = os.path.join(real_dst_folder, name) if folder else real_dst_folder
-            file_copier = FileCopier(matching_path, final_dst_path)
+            file_copier = FileCopier([matching_path], final_dst_path)
             files = file_copier(pattern, src=src, links=True, ignore_case=ignore_case,
                                 excludes=excludes, keep_path=keep_path)
             self.copied_files.update(files)

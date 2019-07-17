@@ -4,6 +4,7 @@ import six
 
 from conans.errors import ConanException
 from conans.model.ref import ConanFileReference
+from conans.util.env_reader import get_env
 
 
 class Requirement(object):
@@ -20,6 +21,16 @@ class Requirement(object):
         self.override = override
         self.private = private
         self.build_require = False
+        self._locked_id = None
+
+    def lock(self, locked_ref, locked_id):
+        # When a requirment is locked it doesn't has ranges
+        self.ref = self.range_ref = locked_ref
+        self._locked_id = locked_id  # And knows the ID of the locked node that is pointing to
+
+    @property
+    def locked_id(self):
+        return self._locked_id
 
     @property
     def version_range(self):
@@ -112,6 +123,8 @@ class Requirements(OrderedDict):
         assert isinstance(own_ref, ConanFileReference) if own_ref else True
         assert isinstance(down_ref, ConanFileReference) if down_ref else True
 
+        error_on_override = get_env("CONAN_ERROR_ON_OVERRIDE", False)
+
         new_reqs = down_reqs.copy()
         if own_ref:
             new_reqs.pop(own_ref.name, None)
@@ -123,9 +136,14 @@ class Requirements(OrderedDict):
                 # update dependency
                 other_ref = other_req.ref
                 if other_ref and other_ref != req.ref:
-                    output.info("%s requirement %s overridden by %s to %s "
-                                % (own_ref, req.ref, down_ref or "your conanfile",
-                                   other_ref))
+                    msg = "requirement %s overridden by %s to %s " \
+                          % (req.ref, down_ref or "your conanfile", other_ref)
+
+                    if error_on_override and not other_req.override:
+                        raise ConanException(msg)
+
+                    msg = "%s %s" % (own_ref, msg)
+                    output.warn(msg)
                     req.ref = other_ref
 
             new_reqs[name] = req
