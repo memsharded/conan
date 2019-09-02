@@ -421,3 +421,34 @@ class package(ConanFile):
         self.assertIn("conanfile.txt: Applying build-requirement: build_req_req/1.0@test/test",
                       client.out)
 
+    def build_req_transitive_reqs_test(self):
+        # https://github.com/conan-io/conan/issues/5682
+        client = TestClient()
+        fontref = ConanFileReference.loads("fontconfig/1.0@test/test")
+        harfbuffref = ConanFileReference.loads("harfbuff/1.0@test/test")
+        freetyperef = ConanFileReference.loads("freetype/1.0@test/test")
+        zlib = ConanFileReference.loads("zlib/1.0@test/test")
+
+        client.save({"conanfile.py": GenConanfile()})
+        client.run("export . zlib/1.0@test/test")
+
+        client.save({"conanfile.py": GenConanfile().with_require(zlib)})
+        client.run("export . freetype/1.0@test/test")
+
+        client.save({"conanfile.py": GenConanfile().with_require(freetyperef)})
+        client.run("export . fontconfig/1.0@test/test")
+
+        harfbuff = textwrap.dedent("""
+            from conans import ConanFile
+            class Pkg(ConanFile):
+                requires = "freetype/1.0@test/test", "fontconfig/1.0@test/test"
+                def build(self):
+                    self.output.info("ZLIB: %s" % self.deps_cpp_info["zlib"].libs)
+            """)
+        client.save({"conanfile.py": harfbuff})
+        client.run("export . harfbuff/1.0@test/test")
+
+        client.save({"conanfile.py": GenConanfile().with_build_require(fontref)
+                    .with_build_require(harfbuffref)})
+        client.run("create . ffmpeg/1.0@test/test --build=missing")
+
