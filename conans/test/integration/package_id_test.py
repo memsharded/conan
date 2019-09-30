@@ -442,6 +442,20 @@ class Pkg(ConanFile):
                         ' -s compiler.version=7.2 -s compiler.cppstd=gnu14', assert_error=True)
         self.assertIn("Missing prebuilt package for 'Hello/1.2.0@user/testing'", self.client.out)
 
+    def test_std_matching_with_compiler_cppstd(self):
+        self._export("Hello", "1.2.0", package_id_text="self.info.default_std_matching()",
+                     channel="user/testing",
+                     settings=["compiler", ]
+                     )
+        self.client.run('install Hello/1.2.0@user/testing '
+                        ' -s compiler="gcc" -s compiler.libcxx=libstdc++11'
+                        ' -s compiler.version=7.2 --build')
+
+        self.client.run('install Hello/1.2.0@user/testing '
+                        ' -s compiler="gcc" -s compiler.libcxx=libstdc++11'
+                        ' -s compiler.version=7.2 -s compiler.cppstd=gnu14')
+        self.assertIn("Hello/1.2.0@user/testing: Already installed!", self.client.out)
+
 
 class PackageRevisionModeTest(unittest.TestCase):
 
