@@ -116,7 +116,7 @@ class CMakeToolchain(object):
 
         # --  - CMake.flags --> CMakeDefinitionsBuilder::get_definitions
         {%- for it, value in definitions.items() %}
-        {%- if it.startswith('CONAN_') %}
+        {%- if it.startswith('CONAN_') and not it == 'CONAN_LINK_RUNTIME %}
         set({{ it }} "{{ value }}")
         {%- else %}
         set({{ it }} "{{ value }}" CACHE STRING "Value assigned from the Conan toolchain" FORCE)
