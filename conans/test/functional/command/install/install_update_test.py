@@ -1,4 +1,6 @@
+import json
 import os
+import textwrap
 import time
 import unittest
 from collections import OrderedDict
@@ -8,7 +10,7 @@ from conans.model.ref import ConanFileReference, PackageReference
 from conans.paths import CONAN_MANIFEST
 from conans.test.utils.cpp_test_files import cpp_hello_conan_files
 from conans.test.utils.tools import NO_SETTINGS_PACKAGE_ID, TestClient, TestServer, \
-    TurboTestClient, GenConanfile
+    TurboTestClient, GenConanfile, create_local_git_repo
 from conans.util.env_reader import get_env
 from conans.util.files import load, save
 
@@ -315,6 +317,7 @@ class ConanLib(ConanFile):
         client.run("install {}".format(ref2), assert_error=True)
         self.assertIn("ERROR: Error downloading binary package: '{}'".format(pref1), client.out)
 
+    os.environ["TESTING_REVISIONS_ENABLED"] = "1"
     @unittest.skipUnless(get_env("TESTING_REVISIONS_ENABLED", False), "Only revisions")
     def update_revisions_test(self):
         # https://github.com/conan-io/conan/issues/7436
@@ -336,3 +339,34 @@ class ConanLib(ConanFile):
         client.run("install -r default pkg/0.1@ --update")
         self.assertIn("pkg/0.1: Downloaded recipe revision b24271e554165a0958a59a2b00587257",
                       client.out)
+
+    @unittest.skipUnless(get_env("TESTING_REVISIONS_ENABLED", False), "Only revisions")
+    def update_revisions_scm_test(self):
+        # https://github.com/conan-io/conan/issues/7436
+        client = TestClient(default_server_user=True)
+        conanfile = textwrap.dedent("""
+            from conans import ConanFile
+            class Pkg(ConanFile):
+                revision_mode = "scm"
+            """)
+        create_local_git_repo({"conanfile.py": conanfile}, branch="my_release",
+                              folder=client.current_folder)
+        client.run("create . pkg/0.1@")
+        self.assertIn("pkg/0.1: Using git commit as the recipe revision", client.out)
+        client.run("upload * --all --confirm")
+        client.save({"other_file.txt": "contents"})
+        client.run_command('git add .')
+        client.run_command('git commit . -m "msg"')
+        time.sleep(1)
+        client.run("create . pkg/0.1@")
+        client.run("upload * --all --confirm")
+        client.run("remove * -f")
+        client.run("search -r default pkg/0.1@ -rev --json=file.json")
+        revisions = json.loads(client.load("file.json"))
+        self.assertEqual(2, len(revisions))
+        new_revision = revisions[1]["revision"]
+        old_revision = revisions[0]["revision"]
+        client.run("install -r default pkg/0.1@#%s" % old_revision)
+        self.assertIn("pkg/0.1: Downloaded recipe revision %s" % old_revision, client.out)
+        client.run("install -r default pkg/0.1@ --update")
+        self.assertIn("pkg/0.1: Downloaded recipe revision %s" % new_revision, client.out)
