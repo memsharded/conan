@@ -9,6 +9,7 @@ from conans.paths import CONAN_MANIFEST
 from conans.test.utils.cpp_test_files import cpp_hello_conan_files
 from conans.test.utils.tools import NO_SETTINGS_PACKAGE_ID, TestClient, TestServer, \
     TurboTestClient, GenConanfile
+from conans.util.env_reader import get_env
 from conans.util.files import load, save
 
 
@@ -313,3 +314,25 @@ class ConanLib(ConanFile):
         # Try to install ref2, it will try to download the binary for ref1
         client.run("install {}".format(ref2), assert_error=True)
         self.assertIn("ERROR: Error downloading binary package: '{}'".format(pref1), client.out)
+
+    @unittest.skipUnless(get_env("TESTING_REVISIONS_ENABLED", False), "Only revisions")
+    def update_revisions_test(self):
+        # https://github.com/conan-io/conan/issues/7436
+        client = TestClient(default_server_user=True)
+        client.save({"conanfile.py": GenConanfile()})
+        client.run("create . pkg/0.1@")
+        client.run("upload * --all --confirm")
+        client.save({"conanfile.py": GenConanfile().with_build_msg("Revisioned")})
+        time.sleep(1)
+        client.run("create . pkg/0.1@")
+        client.run("upload * --all --confirm")
+        client.run("remove * -f")
+        client.run("search -r default pkg/0.1@ -rev")
+        self.assertIn("b24271e554165a0958a59a2b00587257", client.out)
+        self.assertIn("f3367e0e7d170aa12abccb175fee5f97", client.out)
+        client.run("install -r default pkg/0.1@#f3367e0e7d170aa12abccb175fee5f97")
+        self.assertIn("pkg/0.1: Downloaded recipe revision f3367e0e7d170aa12abccb175fee5f97",
+                      client.out)
+        client.run("install -r default pkg/0.1@ --update")
+        self.assertIn("pkg/0.1: Downloaded recipe revision b24271e554165a0958a59a2b00587257",
+                      client.out)
