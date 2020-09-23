@@ -6,7 +6,7 @@ from jinja2 import Template
 
 from conans.client.build.cmake_flags import get_generator, get_generator_platform,  get_toolset, \
     is_multi_configuration
-from conans.client.tools import cpu_count
+from conans.client.tools import cpu_count, vcvars_command
 from conans.errors import ConanException
 from conans.util.files import save
 
@@ -147,7 +147,7 @@ class CMakeToolchain(object):
 
         # C++ Standard
         {% if cppstd -%}
-        message(STATUS "Conan C++ Standard {{ cppstd }} with extensions {{ cppstd_extensions }}}")
+        message(STATUS "Conan C++ Standard {{ cppstd }} with extensions {{ cppstd_extensions }}")
         set(CMAKE_CXX_STANDARD {{ cppstd }})
         set(CMAKE_CXX_EXTENSIONS {{ cppstd_extensions }})
         {%- endif %}
@@ -218,7 +218,7 @@ class CMakeToolchain(object):
     """)
 
     def __init__(self, conanfile, generator=None, generator_platform=None, build_type=None,
-                 toolset=None, parallel=True):
+                 parallel=True):
         self._conanfile = conanfile
 
         self._fpic = self._deduce_fpic()
@@ -233,7 +233,10 @@ class CMakeToolchain(object):
         self._generator_platform = (generator_platform or
                                     get_generator_platform(self._conanfile.settings,
                                                            self._generator))
-        self._toolset = toolset or get_toolset(self._conanfile.settings, self._generator)
+        if self._generator and "Visual" in self._generator:
+            self._toolset = get_toolset(self._conanfile.settings, self._generator)
+        else:
+            self._toolset = None
         self._build_type = build_type or self._conanfile.settings.get_safe("build_type")
 
         self.preprocessor_definitions = PreprocessorDefinitions()
@@ -337,7 +340,15 @@ class CMakeToolchain(object):
                 cppstd_extensions = "OFF"
         return cppstd, cppstd_extensions
 
+    def _vcvars(self):
+        cmd = vcvars_command(self._conanfile)
+        print("vcvars cmd ", cmd)
+        vc_cmd_file = os.path.abspath("conan_vcvars.bat")
+        print("SAVING ", vc_cmd_file, vc_cmd_file)
+        save(vc_cmd_file, cmd)
+
     def write_toolchain_files(self):
+        self._vcvars()
         # Make it absolute, wrt to current folder, set by the caller
         conan_project_include_cmake = os.path.abspath("conan_project_include.cmake")
         conan_project_include_cmake = conan_project_include_cmake.replace("\\", "/")
@@ -391,3 +402,4 @@ class CMakeToolchain(object):
         t = Template(self._template_toolchain)
         content = t.render(conan_project_include_cmake=conan_project_include_cmake, **context)
         save(self.filename, content)
+

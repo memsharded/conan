@@ -83,6 +83,9 @@ class CMakeToolchainBuildHelper(object):
         ])
         generator = '-G "{}" '.format(self._generator) if self._generator else ""
         command = "%s %s%s" % (self._cmake_program, generator, arg_list)
+        vc_cmd_file = os.path.abspath("conan_vcvars.bat")
+        if os.path.exists(vc_cmd_file):
+            command = "conan_vcvars.bat && " + command
 
         is_windows_mingw = platform.system() == "Windows" and self._generator == "MinGW Makefiles"
         self._conanfile.output.info("CMake command: %s" % command)
@@ -124,6 +127,10 @@ class CMakeToolchainBuildHelper(object):
 
         arg_list = [args_to_string([bf]), build_config, args_to_string(args)]
         command = "%s --build %s" % (self._cmake_program, join_arguments(arg_list))
+        vc_cmd_file = os.path.abspath("conan_vcvars.bat")
+        if os.path.exists(vc_cmd_file):
+            command = "conan_vcvars.bat && " + command
+
         self._conanfile.output.info("CMake command: %s" % command)
         self._conanfile.run(command)
 
