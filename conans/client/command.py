@@ -586,6 +586,15 @@ class Command(object):
         init_subparser.add_argument('-f', '--force', default=False, action='store_true',
                                     help='Overwrite existing Conan configuration files')
 
+        settings_subparser = subparsers.add_parser('settings', help='Manage the settings.yml')
+        settings_command_parser = settings_subparser.add_subparsers(dest='settings_command',
+                                                                    help='settings sub-command help')
+        settings_command_parser.required = True
+        settings_command_parser.add_parser('show', help='Show the settings.yml')
+        settings_append = settings_command_parser.add_parser('append', help='Show the settings.yml')
+        settings_append.add_argument("item", help="Item to append")
+        settings_append.add_argument("value", help="Value to append")
+
         args = parser.parse_args(*args)
 
         if args.subcommand == "set":
@@ -622,6 +631,13 @@ class Command(object):
                                               target_folder=args.target_folder)
         elif args.subcommand == 'init':
             return self._conan.config_init(force=args.force)
+        elif args.subcommand == "settings":
+            if args.settings_command == "show":
+                settings = self._conan.config_settings_show()
+                self._out.writeln(settings)
+                return
+            elif args.settings_command == "append":
+                self._conan.config_settings_append(args.item, args.value)
 
     def info(self, *args):
         """

@@ -4,6 +4,7 @@ import sys
 from collections import OrderedDict
 from collections import namedtuple
 
+import yaml
 from six import StringIO
 
 import conans
@@ -678,6 +679,32 @@ class ConanAPIV1(object):
             self.app.cache.registry.initialize_remotes()
             self.app.cache.initialize_default_profile()
             self.app.cache.initialize_settings()
+
+    @api_method
+    def config_settings_show(self):
+        self.app.cache.initialize_settings()
+        return load(self.app.cache.settings_path)
+
+    @api_method
+    def config_settings_append(self, item, value):
+        self.app.cache.initialize_settings()
+        content = load(self.app.cache.settings_path)
+        try:
+            settings = yaml.safe_load(content)
+        except (yaml.YAMLError, AttributeError) as e:
+            raise ConanException("Invalid settings.yml format: {}".format(e))
+        tokens = item.split(".")
+        print("TOKENS")
+        sub = settings
+        for token in tokens:
+            print("PROCESSING ", token)
+            sub = sub[token]
+            print(sub)
+        print("FINAL SUB ", sub)
+        sub.append(value)
+        print("FINAL SETTINGS", settings)
+        content = yaml.safe_dump(settings, default_flow_style=True, indent=True)
+        save(self.app.cache.settings_path, content)
 
     def _info_args(self, reference_or_path, install_folder, profile_host, profile_build,
                    lockfile=None):

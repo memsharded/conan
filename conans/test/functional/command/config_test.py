@@ -164,3 +164,18 @@ class ConfigTest(unittest.TestCase):
     def _assert_dict_subset(self, expected, actual):
         actual = {k: v for k, v in actual.items() if k in expected}
         self.assertDictEqual(expected, actual)
+
+
+class ConfigSettingsTest(unittest.TestCase):
+
+    def test_basic(self):
+        client = TestClient()
+        client.run("config settings show")
+        self.assertIn("cppstd: [None, 98, gnu98, 11, gnu11, 14, gnu14, 17, gnu17, 20, gnu20]",
+                      client.out)
+        client.run("config settings append compiler.gcc.cppstd c++23")
+        client.run("config settings show")
+        print(client.out)
+        self.assertIn("cppstd: [None, 98, gnu98, 11, gnu11, 14, gnu14, 17, gnu17, 20, gnu20, c++23]",
+                      client.out)
+
