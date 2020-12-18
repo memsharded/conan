@@ -33,13 +33,15 @@ class Base(unittest.TestCase):
                 tc = CMakeToolchain(self)
                 tc.variables["MYVAR"] = "MYVAR_VALUE"
                 tc.variables["MYVAR2"] = "MYVAR_VALUE2"
-                tc.variables.debug["MYVAR_CONFIG"] = "MYVAR_DEBUG"
-                tc.variables.release["MYVAR_CONFIG"] = "MYVAR_RELEASE"
-                tc.variables.debug["MYVAR2_CONFIG"] = "MYVAR2_DEBUG"
-                tc.variables.release["MYVAR2_CONFIG"] = "MYVAR2_RELEASE"
                 tc.preprocessor_definitions["MYDEFINE"] = "MYDEF_VALUE"
-                tc.preprocessor_definitions.debug["MYDEFINE_CONFIG"] = "MYDEF_DEBUG"
-                tc.preprocessor_definitions.release["MYDEFINE_CONFIG"] = "MYDEF_RELEASE"
+                if self.settings.build_type == "Debug":
+                    tc.variables["MYVAR_CONFIG"] = "MYVAR_DEBUG"
+                    tc.variables["MYVAR2_CONFIG"] = "MYVAR2_DEBUG"
+                    tc.preprocessor_definitions["MYDEFINE_CONFIG"] = "MYDEF_DEBUG"
+                else:
+                    tc.variables["MYVAR_CONFIG"] = "MYVAR_RELEASE"
+                    tc.variables["MYVAR2_CONFIG"] = "MYVAR2_RELEASE"
+                    tc.preprocessor_definitions["MYDEFINE_CONFIG"] = "MYDEF_RELEASE"
                 tc.generate()
 
             def build(self):
@@ -54,7 +56,7 @@ class Base(unittest.TestCase):
     main = gen_function_cpp(name="main", includes=["app"], calls=["app"])
 
     cmakelist = textwrap.dedent("""
-        cmake_minimum_required(VERSION 2.8)
+        cmake_minimum_required(VERSION 3.15)
         project(App C CXX)
         if(CONAN_TOOLCHAIN_INCLUDED AND CMAKE_VERSION VERSION_LESS "3.15")
             include("${CMAKE_BINARY_DIR}/conan_project_include.cmake")
@@ -86,8 +88,10 @@ class Base(unittest.TestCase):
         find_package(hello REQUIRED)
         add_library(app_lib app_lib.cpp)
         target_link_libraries(app_lib PRIVATE hello::hello)
+        message(STATUS "MYVAR ${MYVAR}")
+        message(STATUS "MYVAR_CONFIG ${MYVAR_CONFIG}")
         target_compile_definitions(app_lib PRIVATE MYVAR="${MYVAR}")
-        target_compile_definitions(app_lib PRIVATE MYVAR_CONFIG=${MYVAR_CONFIG})
+        target_compile_definitions(app_lib PRIVATE MYVAR_CONFIG="${MYVAR_CONFIG}")
         add_executable(app app.cpp)
         target_link_libraries(app PRIVATE app_lib)
         """)
@@ -169,6 +173,7 @@ class WinTest(Base):
     @parameterized.expand([("Debug", "MTd", "15", "14", "x86", "v140", True),
                            ("Release", "MD", "15", "17", "x86_64", "", False)])
     def test_toolchain_win(self, build_type, runtime, version, cppstd, arch, toolset, shared):
+        print(self.client.current_folder)
         settings = {"compiler": "Visual Studio",
                     "compiler.version": version,
                     "compiler.toolset": toolset,
@@ -195,12 +200,12 @@ class WinTest(Base):
         shared_str = "ON" if shared else "OFF"
         vals = {"CMAKE_GENERATOR_PLATFORM": generator_platform,
                 "CMAKE_BUILD_TYPE": "",
-                "CMAKE_CXX_FLAGS": "/MP1 /DWIN32 /D_WINDOWS /W3 /GR /EHsc",
-                "CMAKE_CXX_FLAGS_DEBUG": "/%sd /Zi /Ob0 /Od /RTC1" % runtime,
-                "CMAKE_CXX_FLAGS_RELEASE": "/%s /O2 /Ob2 /DNDEBUG" % runtime,
-                "CMAKE_C_FLAGS": "/MP1 /DWIN32 /D_WINDOWS /W3",
-                "CMAKE_C_FLAGS_DEBUG": "/%sd /Zi /Ob0 /Od /RTC1" % runtime,
-                "CMAKE_C_FLAGS_RELEASE": "/%s /O2 /Ob2 /DNDEBUG" % runtime,
+                "CMAKE_CXX_FLAGS": "/MP1 /DWIN32 /D_WINDOWS /GR /EHsc",
+                "CMAKE_CXX_FLAGS_DEBUG": "/Zi /Ob0 /Od /RTC1",
+                "CMAKE_CXX_FLAGS_RELEASE": "/O2 /Ob2 /DNDEBUG",
+                "CMAKE_C_FLAGS": "/MP1 /DWIN32 /D_WINDOWS",
+                "CMAKE_C_FLAGS_DEBUG": "/Zi /Ob0 /Od /RTC1",
+                "CMAKE_C_FLAGS_RELEASE": "/O2 /Ob2 /DNDEBUG",
                 "CMAKE_SHARED_LINKER_FLAGS": "/machine:%s" % arch,
                 "CMAKE_EXE_LINKER_FLAGS": "/machine:%s" % arch,
                 "CMAKE_CXX_STANDARD": cppstd,
@@ -219,13 +224,10 @@ class WinTest(Base):
 
         _verify_out()
 
-        toolchain = self.client.load("build/conan_toolchain.cmake")
         include = self.client.load("build/conan_project_include.cmake")
         opposite_build_type = "Release" if build_type == "Debug" else "Debug"
         settings["build_type"] = opposite_build_type
         self._run_build(settings, options)
-        # The generated toolchain files must be identical because it is a multi-config
-        self.assertEqual(toolchain, self.client.load("build/conan_toolchain.cmake"))
         self.assertEqual(include, self.client.load("build/conan_project_include.cmake"))
 
         self._run_app("Release", bin_folder=True)

@@ -1,34 +1,19 @@
 import os
+import re
 import textwrap
 import warnings
-from collections import OrderedDict, defaultdict
+from collections import OrderedDict
 
 from jinja2 import DictLoader, Environment
 
-from conans.util.files import save
+from conans.util.files import save, load
 
 
-class Variables(OrderedDict):
-    _configuration_types = None  # Needed for py27 to avoid infinite recursion
-
-    def __init__(self):
-        super(Variables, self).__init__()
-        self._configuration_types = {}
-
-    def __getattribute__(self, config):
-        try:
-            return super(Variables, self).__getattribute__(config)
-        except AttributeError:
-            return self._configuration_types.setdefault(config, dict())
-
-    @property
-    def configuration_types(self):
-        # Reverse index for the configuration_types variables
-        ret = defaultdict(list)
-        for conf, definitions in self._configuration_types.items():
-            for k, v in definitions.items():
-                ret[k].append((conf, v))
-        return ret
+def get_vars_config(variables, config):
+    result = OrderedDict()
+    for k, v in variables.items():
+        result[k] = OrderedDict([(config, v)])
+    return result
 
 
 class CMakeToolchainBase(object):
@@ -36,21 +21,17 @@ class CMakeToolchainBase(object):
     project_include_filename = "conan_project_include.cmake"
 
     _toolchain_macros_tpl = textwrap.dedent("""
-        {% macro iterate_configs(var_config, action) -%}
-            {% for it, values in var_config.items() -%}
+        {% macro iterate_configs(vars_config, action) -%}
+            {% for var, config_values in vars_config.items() -%}
                 {%- set genexpr = namespace(str='') %}
-                {%- for conf, value in values -%}
+                {% for conf, value in config_values.items() -%}
                     {%- set genexpr.str = genexpr.str +
-                                          '$<IF:$<CONFIG:' + conf + '>,"' + value|string + '",' %}
-                    {%- if loop.last %}{% set genexpr.str = genexpr.str + '""' -%}{%- endif -%}
-                {%- endfor -%}
-                {% for i in range(values|count) %}{%- set genexpr.str = genexpr.str + '>' %}
-                {%- endfor -%}
+                                      '$<$<CONFIG:' + conf + '>:' + value|string + '>' %}
+                {%- endfor %}
                 {% if action=='set' %}
-                set({{ it }} {{ genexpr.str }} CACHE STRING
-                    "Variable {{ it }} conan-toolchain defined")
-                {% elif action=='add_definitions' %}
-                add_definitions(-D{{ it }}={{ genexpr.str }})
+                set({{ var }} "{{ genexpr.str }}" CACHE STRING "Var conantoolchain defined")
+                {% elif action=='add_compile_definitions' %}
+                add_compile_definitions({{ var }}="{{ genexpr.str }}")
                 {% endif %}
             {%- endfor %}
         {% endmacro %}
@@ -117,32 +98,24 @@ class CMakeToolchainBase(object):
         {% endblock %}
 
         # Variables
-        {% for it, value in variables.items() %}
-        set({{ it }} "{{ value }}" CACHE STRING "Variable {{ it }} conan-toolchain defined")
-        {%- endfor %}
-        # Variables  per configuration
         {{ toolchain_macros.iterate_configs(variables_config, action='set') }}
 
-        # Preprocessor definitions
-        {% for it, value in preprocessor_definitions.items() -%}
-        # add_compile_definitions only works in cmake >= 3.12
-        add_definitions(-D{{ it }}="{{ value }}")
-        {%- endfor %}
         # Preprocessor definitions per configuration
         {{ toolchain_macros.iterate_configs(preprocessor_definitions_config,
-                                            action='add_definitions') }}
+                                            action='add_compile_definitions') }}
         """)
 
     def __init__(self, conanfile, **kwargs):
         self._conanfile = conanfile
-        self.variables = Variables()
-        self.preprocessor_definitions = Variables()
+        self.variables = OrderedDict()
+        self.preprocessor_definitions = OrderedDict()
 
         # To find the generated cmake_find_package finders
         self.cmake_prefix_path = "${CMAKE_BINARY_DIR}"
         self.cmake_module_path = "${CMAKE_BINARY_DIR}"
 
         self.build_type = None
+        self.configuration = self._conanfile.settings.get_safe("build_type")
 
     def _get_templates(self):
         return {
@@ -150,15 +123,56 @@ class CMakeToolchainBase(object):
             'base_toolchain': self._base_toolchain_tpl
         }
 
+    def _variables(self):
+        # Parsing existing toolchain file to get existing configured runtimes
+        config_dict = {}
+        if os.path.exists(self.filename):
+            existing_include = load(self.filename)
+            sets = re.findall(r"set\(([\S]*) (.*) CACHE STRING \"Var conantoolchain defined\"\)",
+                              existing_include)
+            for set_def in sets:
+                var_name = set_def[0]
+                var_value = set_def[1]
+                print("VAR!!!!! ", var_name, var_value)
+                matches = re.findall(r"\$<\$<CONFIG:([A-Za-z]*)>:(.*)>", var_value)
+                config_dict[var_name] = dict(matches)
+        print("READ VARIABLES ", config_dict)
+        return config_dict
+
+    def _existing_preprocessor(self):
+        # Parsing existing toolchain file to get existing configured runtimes
+        config_dict = {}
+        if os.path.exists(self.filename):
+            existing_include = load(self.filename)
+            sets = re.findall(r"add_compile_definitions\(([\S]*)=(.*)\)",
+                              existing_include)
+            for set_def in sets:
+                var_name = set_def[0]
+                var_value = set_def[1]
+                print("PREPROCESSOR!!!!! ", var_name, var_value)
+                matches = re.findall(r"\$<\$<CONFIG:([A-Za-z]*)>:(.*)>", var_value)
+                config_dict[var_name] = dict(matches)
+        print("READ PREPROCESSOR ", config_dict)
+        return config_dict
+
     def _get_template_context_data(self):
         """ Returns two dictionaries, the context for the '_template_toolchain' and
             the context for the '_template_project_include' templates.
         """
+        existing_vars = self._variables()
+        variables = get_vars_config(self.variables, self.configuration)
+        for var, config_values in variables.items():
+            existing_vars.setdefault(var, OrderedDict()).update(config_values)
+        print("EXISTING VARS ", existing_vars)
+
+        existing_preprocessor = self._existing_preprocessor()
+        definitions = get_vars_config(self.preprocessor_definitions, self.configuration)
+        for var, config_values in definitions.items():
+            existing_preprocessor.setdefault(var, OrderedDict()).update(config_values)
+        print("EXISTING PREPROCESSOR ", existing_preprocessor)
         ctxt_toolchain = {
-            "variables": self.variables,
-            "variables_config": self.variables.configuration_types,
-            "preprocessor_definitions": self.preprocessor_definitions,
-            "preprocessor_definitions_config": self.preprocessor_definitions.configuration_types,
+            "variables_config": existing_vars,
+            "preprocessor_definitions_config": existing_preprocessor,
             "cmake_prefix_path": self.cmake_prefix_path,
             "cmake_module_path": self.cmake_module_path,
             "build_type": self.build_type,
