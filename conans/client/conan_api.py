@@ -1423,8 +1423,8 @@ def get_graph_info(profile_host, profile_build, cwd, install_folder, cache, outp
         graph_info.profile_host = graph_lock_file.profile_host
         graph_info.profile_build = graph_lock_file.profile_build
         if graph_info.profile_host is None:
-            raise ConanException("Lockfiles with --base do not contain profile information, "
-                                 "cannot be used. Create a full lockfile")
+            # This is a base profile
+
         graph_info.profile_host.process_settings(cache, preprocess=False)
         if graph_info.profile_build is not None:
             graph_info.profile_build.process_settings(cache, preprocess=False)

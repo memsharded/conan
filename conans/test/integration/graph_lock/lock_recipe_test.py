@@ -273,3 +273,16 @@ class LockRecipeTest(unittest.TestCase):
         self.assertIn("liba/0.1:cb054d0b3e1ca595dc66bc2339d40f1f8f04ab31 - Build", client.out)
         self.assertIn("libb/0.1:Package_ID_unknown - Unknown", client.out)
         self.assertIn("cmake/1.0:5ab84d6acfe1f23c4fae0ab88f26e3a396351ac9 - Cache", client.out)
+
+
+def test_install_base():
+    client = TestClient()
+    client.save({"conanfile.py": GenConanfile()})
+    client.run("create . liba/1.0@")
+    client.save({"conanfile.py": GenConanfile().with_require("liba/[>=1.0]")})
+    client.run("export . libb/1.0@")
+    client.run("lock create --reference=libb/1.0 --lockfile-out=base.lock --base")
+
+    client.run("install libb/1.0@ --build=missing --lockfile=base.lock --lockfile-out=libb.lock")
+    libb_lock = client.load("libb.lock")
+    print(libb_lock)
