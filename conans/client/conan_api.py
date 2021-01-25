@@ -1420,14 +1420,26 @@ def get_graph_info(profile_host, profile_build, cwd, install_folder, cache, outp
             graph_info.root = root_ref
         lockfile = lockfile if os.path.isfile(lockfile) else os.path.join(lockfile, LOCKFILE)
         graph_lock_file = GraphLockFile.load(lockfile, cache.config.revisions_enabled)
-        graph_info.profile_host = graph_lock_file.profile_host
-        graph_info.profile_build = graph_lock_file.profile_build
-        if graph_info.profile_host is None:
+        if graph_lock_file.profile_host is None:
             # This is a base profile
-
-        graph_info.profile_host.process_settings(cache, preprocess=False)
-        if graph_info.profile_build is not None:
-            graph_info.profile_build.process_settings(cache, preprocess=False)
+            phost = profile_from_args(profile_host.profiles, profile_host.settings,
+                                      profile_host.options, profile_host.env, cwd, cache)
+            phost.process_settings(cache)
+            if profile_build:
+                # Only work on the profile_build if something is provided
+                pbuild = profile_from_args(profile_build.profiles, profile_build.settings,
+                                           profile_build.options, profile_build.env, cwd, cache)
+                pbuild.process_settings(cache)
+            else:
+                pbuild = None
+            graph_info.profile_host = phost
+            graph_info.profile_build = pbuild
+        else:
+            graph_info.profile_host = graph_lock_file.profile_host
+            graph_info.profile_build = graph_lock_file.profile_build
+            graph_info.profile_host.process_settings(cache, preprocess=False)
+            if graph_info.profile_build is not None:
+                graph_info.profile_build.process_settings(cache, preprocess=False)
         graph_info.graph_lock = graph_lock_file.graph_lock
         output.info("Using lockfile: '{}'".format(lockfile))
         return graph_info

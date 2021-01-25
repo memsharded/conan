@@ -10,15 +10,27 @@ from conans.util.env_reader import get_env
 
 class LockRecipeTest(unittest.TestCase):
 
-    def test_error_pass_base(self):
+    def test_install_base(self):
         client = TestClient()
         client.save({"conanfile.py": GenConanfile()})
-        client.run("create . pkg/0.1@")
-        client.save({"conanfile.py": GenConanfile().with_require("pkg/0.1")})
-        client.run("lock create conanfile.py --base --lockfile-out=conan.lock")
-        client.run("install . --lockfile=conan.lock", assert_error=True)
-        self.assertIn("Lockfiles with --base do not contain profile information, "
-                      "cannot be used. Create a full lockfile", client.out)
+        client.run("create . liba/1.0@")
+        client.save({"conanfile.py": GenConanfile().with_require("liba/[>=1.0]")})
+        client.run("export . libb/1.0@")
+        client.run("lock create --reference=libb/1.0 --lockfile-out=base.lock --base")
+        base = client.load("base.lock")
+        assert "package_id" not in base
+        assert "prev" not in base
+        assert "profile" not in base
+        client.run("install libb/1.0@ --lockfile=base.lock --lockfile-out=libb.lock",
+                   assert_error=True)
+        assert "ERROR: Missing prebuilt package for 'libb/1.0'" in client.out
+        client.run("install libb/1.0@ --build=missing --lockfile=base.lock --lockfile-out=libb.lock")
+        assert "liba/1.0:5ab84d6acfe1f23c4fae0ab88f26e3a396351ac9 - Cache" in client.out
+        assert "libb/1.0:8ecbf93ba63522ffb32573610c80ab4dcb399b52 - Build" in client.out
+        libb_lock = client.load("libb.lock")
+        assert "package_id" in libb_lock
+        assert "prev" in libb_lock
+        assert "profile" in libb_lock
 
     def test_lock_recipe(self):
         client = TestClient()
@@ -273,16 +285,3 @@ class LockRecipeTest(unittest.TestCase):
         self.assertIn("liba/0.1:cb054d0b3e1ca595dc66bc2339d40f1f8f04ab31 - Build", client.out)
         self.assertIn("libb/0.1:Package_ID_unknown - Unknown", client.out)
         self.assertIn("cmake/1.0:5ab84d6acfe1f23c4fae0ab88f26e3a396351ac9 - Cache", client.out)
-
-
-def test_install_base():
-    client = TestClient()
-    client.save({"conanfile.py": GenConanfile()})
-    client.run("create . liba/1.0@")
-    client.save({"conanfile.py": GenConanfile().with_require("liba/[>=1.0]")})
-    client.run("export . libb/1.0@")
-    client.run("lock create --reference=libb/1.0 --lockfile-out=base.lock --base")
-
-    client.run("install libb/1.0@ --build=missing --lockfile=base.lock --lockfile-out=libb.lock")
-    libb_lock = client.load("libb.lock")
-    print(libb_lock)
