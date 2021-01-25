@@ -32,6 +32,39 @@ class LockRecipeTest(unittest.TestCase):
         assert "prev" in libb_lock
         assert "profile" in libb_lock
 
+    def test_install_base_relaxed(self):
+        client = TestClient()
+        client.save({"conanfile.py": GenConanfile()})
+        client.run("create . liba/1.0@")
+        client.run("create . liboptional/1.0@")
+        libb = textwrap.dedent("""
+            from conans import ConanFile
+            class Pkg(ConanFile):
+                settings = "os"
+                def requirements(self):
+                    self.requires("liba/[>=1.0]")
+                    if self.settings.os == "Windows":
+                        self.requires("liboptional/1.0")
+            """)
+        client.save({"conanfile.py": libb})
+        client.run("export . libb/1.0@")
+        client.run("lock create --reference=libb/1.0 -s os=Linux --lockfile-out=base.lock --base")
+        base = client.load("base.lock")
+        assert "package_id" not in base
+        assert "prev" not in base
+        assert "profile" not in base
+        client.run("install libb/1.0@ --lockfile=base.lock -s os=Linux --lockfile-out=libb.lock",
+                   assert_error=True)
+        assert "ERROR: Missing prebuilt package for 'libb/1.0'" in client.out
+        client.run("install libb/1.0@ --build=missing -s os=Linux --lockfile=base.lock "
+                   "--lockfile-out=libb.lock")
+        assert "liba/1.0:5ab84d6acfe1f23c4fae0ab88f26e3a396351ac9 - Cache" in client.out
+        assert "libb/1.0:8ecbf93ba63522ffb32573610c80ab4dcb399b52 - Build" in client.out
+        libb_lock = client.load("libb.lock")
+        assert "package_id" in libb_lock
+        assert "prev" in libb_lock
+        assert "profile" in libb_lock
+
     def test_lock_recipe(self):
         client = TestClient()
         client.save({"conanfile.py": GenConanfile().with_setting("os")})
