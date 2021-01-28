@@ -156,6 +156,7 @@ class BuildOrderTest(unittest.TestCase):
                    " --build={0}".format(build_order[0][0][0]))
         self.assertIn("dep/0.1:5ab84d6acfe1f23c4fae0ab88f26e3a396351ac9 - Build", client.out)
         locked = json.loads(client.load("conan.lock"))["graph_lock"]["nodes"]
+        print(locked)
         node = locked["3"]
         self.assertEqual(node.get("prev"), prev_dep)
         node = locked["2"]

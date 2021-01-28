@@ -50,6 +50,7 @@ class LockRecipeTest(unittest.TestCase):
         client.run("export . libb/1.0@")
         client.run("lock create --reference=libb/1.0 -s os=Linux --lockfile-out=base.lock --base")
         base = client.load("base.lock")
+        assert "liboptional" not in base
         assert "package_id" not in base
         assert "prev" not in base
         assert "profile" not in base
@@ -59,8 +60,20 @@ class LockRecipeTest(unittest.TestCase):
         client.run("install libb/1.0@ --build=missing -s os=Linux --lockfile=base.lock "
                    "--lockfile-out=libb.lock")
         assert "liba/1.0:5ab84d6acfe1f23c4fae0ab88f26e3a396351ac9 - Cache" in client.out
-        assert "libb/1.0:8ecbf93ba63522ffb32573610c80ab4dcb399b52 - Build" in client.out
+        assert "libb/1.0:54c4a917d16b390c08bd515124cf298067903bf4 - Build" in client.out
         libb_lock = client.load("libb.lock")
+        assert "liboptional" not in libb_lock
+        assert "package_id" in libb_lock
+        assert "prev" in libb_lock
+        assert "profile" in libb_lock
+
+        client.run("install libb/1.0@ --build=missing -s os=Windows --lockfile=base.lock "
+                   "--lockfile-out=libb.lock")
+        assert "liba/1.0:5ab84d6acfe1f23c4fae0ab88f26e3a396351ac9 - Cache" in client.out
+        assert "libb/1.0:820c8a8d1ae872993c941861177d98e1b45db201 - Build" in client.out
+        assert "liboptional/1.0:5ab84d6acfe1f23c4fae0ab88f26e3a396351ac9 - Cache" in client.out
+        libb_lock = client.load("libb.lock")
+        assert "liboptional/1.0" in libb_lock
         assert "package_id" in libb_lock
         assert "prev" in libb_lock
         assert "profile" in libb_lock

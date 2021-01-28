@@ -1420,7 +1420,8 @@ def get_graph_info(profile_host, profile_build, cwd, install_folder, cache, outp
         lockfile = lockfile if os.path.isfile(lockfile) else os.path.join(lockfile, LOCKFILE)
         graph_lock_file = GraphLockFile.load(lockfile, cache.config.revisions_enabled)
         if graph_lock_file.profile_host is None:
-            # This is a base profile
+            # This is a base profile, by definition should be relaxed
+            graph_lock_file.graph_lock.relax()
             phost = profile_from_args(profile_host.profiles, profile_host.settings,
                                       profile_host.options, profile_host.env, cwd, cache)
             phost.process_settings(cache)
@@ -1434,6 +1435,15 @@ def get_graph_info(profile_host, profile_build, cwd, install_folder, cache, outp
             graph_info.profile_host = phost
             graph_info.profile_build = pbuild
         else:
+            if (profile_host.profiles or profile_host.settings or profile_host.options or
+                    profile_host.env):
+                raise ConanException("Cannot use profile, settings, options or env 'host' when "
+                                     "using lockfile")
+            if (profile_build.profiles or profile_build.settings or profile_build.options or
+                    profile_build.env):
+                raise ConanException("Cannot use profile, settings, options or env 'build' when "
+                                     "using lockfile")
+
             graph_info.profile_host = graph_lock_file.profile_host
             graph_info.profile_build = graph_lock_file.profile_build
             graph_info.profile_host.process_settings(cache, preprocess=False)

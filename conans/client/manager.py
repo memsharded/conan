@@ -13,7 +13,7 @@ from conans.client.tools import cross_building, get_cross_building_settings
 from conans.errors import ConanException
 from conans.model.conan_file import ConanFile
 from conans.model.ref import ConanFileReference
-from conans.model.graph_lock import GraphLockFile
+from conans.model.graph_lock import GraphLockFile, GraphLock
 from conans.paths import CONANINFO
 from conans.util.files import normalize, save
 
