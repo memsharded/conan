@@ -81,6 +81,7 @@ class Requirement:
                  (self.libs and other.libs) or
                  (self.run and other.run) or
                  (self.visible and other.visible) or
+                 self.override or
                  (self.ref == other.ref)))
 
     def aggregate(self, other):
@@ -186,9 +187,10 @@ class BuildRequirements:
     def __init__(self, requires):
         self._requires = requires
 
-    def __call__(self, ref, package_id_mode=None, visible=False):
+    def __call__(self, ref, package_id_mode=None, visible=False, override=False):
         # TODO: Check which arguments could be user-defined
-        self._requires.build_require(ref, package_id_mode=package_id_mode, visible=visible)
+        self._requires.build_require(ref, package_id_mode=package_id_mode, visible=visible,
+                                     override=override)
 
 
 class TestRequirements:
@@ -235,11 +237,12 @@ class Requirements:
             raise ConanException("Duplicated requirement: {}".format(ref))
         self._requires[req] = req
 
-    def build_require(self, ref, raise_if_duplicated=True, package_id_mode=None, visible=False):
+    def build_require(self, ref, raise_if_duplicated=True, package_id_mode=None, visible=False,
+                      override=False):
         # FIXME: This raise_if_duplicated is ugly, possibly remove
         ref = ConanFileReference.loads(ref)
         req = Requirement(ref, headers=False, libs=False, build=True, run=True, visible=visible,
-                          package_id_mode=package_id_mode)
+                          package_id_mode=package_id_mode, override=override)
         if raise_if_duplicated and self._requires.get(req):
             raise ConanException("Duplicated requirement: {}".format(ref))
         self._requires[req] = req

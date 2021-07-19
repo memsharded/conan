@@ -560,3 +560,31 @@ class PublicBuildRequiresTest(GraphManagerTest):
         self._check_node(app, "app/0.1@", deps=[libb, libc], dependents=[])
         self._check_node(libb, "libb/0.1#123", deps=[cmake1], dependents=[app])
         self._check_node(cmake1, "cmake/0.1#123", deps=[], dependents=[libb])
+
+    def test_build_require_override(self):
+        # app -> libb -(br public)----\  # overriden by app
+        #   \--> libc -(br public)-> cmake/0.2
+        self.recipe_conanfile("cmake/0.1", GenConanfile())
+        self.recipe_conanfile("cmake/0.2", GenConanfile())
+        self.recipe_conanfile("libb/0.1", GenConanfile().with_build_requirement("cmake/0.1",
+                                                                                visible=True))
+        self.recipe_conanfile("libc/0.1", GenConanfile().with_build_requirement("cmake/0.2",
+                                                                                visible=True))
+
+        deps_graph = self.build_graph(GenConanfile("app", "0.1").with_requires("libb/0.1",
+                                                                               "libc/0.1")
+                                      .with_build_requirement("cmake/0.2", override=True))
+
+        self.assertEqual(4, len(deps_graph.nodes))
+        app = deps_graph.root
+        libb = app.dependencies[0].dst
+        libc = app.dependencies[1].dst
+        cmake1 = libb.dependencies[0].dst
+        cmake2 = libc.dependencies[0].dst
+
+        assert cmake1 is cmake2
+
+        self._check_node(app, "app/0.1@", deps=[libb, libc], dependents=[])
+        self._check_node(libb, "libb/0.1#123", deps=[cmake1], dependents=[app])
+        self._check_node(libc, "libc/0.1#123", deps=[cmake1], dependents=[app])
+        self._check_node(cmake1, "cmake/0.2#123", deps=[], dependents=[libb, libc])
