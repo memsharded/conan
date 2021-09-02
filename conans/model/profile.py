@@ -8,7 +8,7 @@ from conans.model.conf import ConfDefinition
 from conans.model.env_info import EnvValues
 from conans.model.options import OptionsValues
 from conans.model.ref import ConanFileReference
-from conans.model.values import Values
+from conans.model.values import SettingsValues
 
 
 class Profile(object):
@@ -17,8 +17,8 @@ class Profile(object):
 
     def __init__(self):
         # Input sections, as defined by user profile files and command line
-        self.settings = OrderedDict()
-        self.package_settings = defaultdict(OrderedDict)
+        self.settings = SettingsValues()
+        self.package_settings = defaultdict(SettingsValues)
         self.env_values = EnvValues()
         self.options = OptionsValues()
         self.build_requires = OrderedDict()  # ref pattern: list of ref
@@ -28,7 +28,6 @@ class Profile(object):
         # Cached processed values
         self.processed_settings = None  # Settings with values, and smart completion
         self._user_options = None
-        self._package_settings_values = None
         self.dev_reference = None  # Reference of the package being develop
 
     @property
@@ -37,23 +36,14 @@ class Profile(object):
             self._user_options = self.options.copy()
         return self._user_options
 
-    @property
-    def package_settings_values(self):
-        if self._package_settings_values is None:
-            self._package_settings_values = {}
-            for pkg, settings in self.package_settings.items():
-                self._package_settings_values[pkg] = list(settings.items())
-        return self._package_settings_values
-
     def process_settings(self, cache, preprocess=True):
         assert self.processed_settings is None, "processed settings must be None"
         self.processed_settings = cache.settings.copy()
-        self.processed_settings.values = Values.from_list(list(self.settings.items()))
+        self.processed_settings.values = self.settings
         if preprocess:
             settings_preprocessor.preprocess(self.processed_settings)
             # Redefine the profile settings values with the preprocessed ones
-            # FIXME: Simplify the values.as_list()
-            self.settings = OrderedDict(self.processed_settings.values.as_list())
+            self.settings = self.processed_settings.values
 
             # Preprocess also scoped settings
             for pkg, pkg_settings in self.package_settings.items():
@@ -69,9 +59,9 @@ class Profile(object):
                 # TODO: Assign the _validated_ settings and do not compute again
 
     def dumps(self):
-        result = ["[settings]"]
-        for name, value in self.settings.items():
-            result.append("%s=%s" % (name, value))
+        result = ["[settings]",
+                  self.settings.dumps()]
+
         for package, values in self.package_settings.items():
             for name, value in values.items():
                 result.append("%s:%s=%s" % (package, name, value))
@@ -126,7 +116,7 @@ class Profile(object):
         """Mix the specified settings with the current profile.
         Specified settings are prioritized to profile"""
 
-        assert(isinstance(new_settings, OrderedDict))
+        assert isinstance(new_settings, SettingsValues)
 
         # apply the current profile
         res = copy.copy(self.settings)

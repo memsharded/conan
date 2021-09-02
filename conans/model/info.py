@@ -8,7 +8,7 @@ from conans.model.dependencies import UserRequirementsDict
 from conans.model.env_info import EnvValues
 from conans.model.options import OptionsValues
 from conans.model.ref import PackageReference, ConanFileReference
-from conans.model.values import Values
+from conans.model.values import SettingsValues
 from conans.paths import CONANINFO
 from conans.util.config_parser import ConfigParser
 from conans.util.files import load
@@ -420,7 +420,8 @@ class ConanInfo(object):
         result = ConanInfo()
         result.invalid = None
         result.full_settings = settings
-        result.settings = settings.copy()
+        # FIXME: Poor copy creation to not break more tests, will be removed when full_settings is removed
+        result.settings = SettingsValues(settings._values.copy())
         result.full_options = options
         result.options = options.copy()
         result.options.clear_indirect()
@@ -442,8 +443,8 @@ class ConanInfo(object):
                               raise_unexpected_field=False)
         result = ConanInfo()
         result.invalid = None
-        result.settings = Values.loads(parser.settings)
-        result.full_settings = Values.loads(parser.full_settings)
+        result.settings = SettingsValues.loads(parser.settings)
+        result.full_settings = SettingsValues.loads(parser.full_settings)
         result.options = OptionsValues.loads(parser.options)
         result.full_options = OptionsValues.loads(parser.full_options)
         result.full_requires = _PackageReferenceList.loads(parser.full_requires)
@@ -575,10 +576,10 @@ class ConanInfo(object):
     def vs_toolset_compatible(self):
         """Default behaviour, same package for toolset v140 with compiler=Visual Studio 15 than
         using Visual Studio 14"""
-        if self.full_settings.compiler != "Visual Studio":
+        if self.full_settings.get("compiler") != "Visual Studio":
             return
 
-        toolset = str(self.full_settings.compiler.toolset)
+        toolset = str(self.full_settings.get("compiler.toolset"))
         version = MSVS_DEFAULT_TOOLSETS_INVERSE.get(toolset)
         if version is not None:
             self.settings.compiler.version = version

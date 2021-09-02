@@ -174,7 +174,7 @@ class ConanFileLoader(object):
         # Prepare the settings for the loaded conanfile
         # Mixing the global settings with the specified for that name if exist
         tmp_settings = profile.processed_settings.copy()
-        package_settings_values = profile.package_settings_values
+        package_settings_values = profile.package_settings
         if conanfile.user is not None:
             ref_str = "%s/%s@%s/%s" % (conanfile.name, conanfile.version,
                                        conanfile.user, conanfile.channel)
@@ -273,7 +273,7 @@ class ConanFileLoader(object):
     def _parse_conan_txt(self, contents, path, display_name, profile):
         conanfile = ConanFile(self._output, self._runner, display_name)
         tmp_settings = profile.processed_settings.copy()
-        package_settings_values = profile.package_settings_values
+        package_settings_values = profile.package_settings
         if "&" in package_settings_values:
             pkg_settings = package_settings_values.get("&")
             if pkg_settings:

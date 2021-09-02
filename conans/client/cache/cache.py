@@ -22,6 +22,7 @@ from conans.model.conf import ConfDefinition
 from conans.model.profile import Profile
 from conans.model.ref import ConanFileReference, PackageReference
 from conans.model.settings import Settings
+from conans.model.values import SettingsValues
 from conans.paths import ARTIFACTS_PROPERTIES_FILE
 from conans.util.files import list_folder_subdirs, load, normalize, save, remove, mkdir
 from conans.util.locks import Lock
@@ -348,8 +349,7 @@ class ClientCache(object):
                                  Color.BRIGHT_MAGENTA)
 
             default_profile = Profile()
-            tmp = OrderedDict(default_settings)
-            default_profile.update_settings(tmp)
+            default_profile.settings = SettingsValues(OrderedDict(default_settings))
             save(self.default_profile_path, default_profile.dumps())
 
     def reset_default_profile(self):

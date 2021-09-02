@@ -1,7 +1,9 @@
+from collections import OrderedDict
+
 import yaml
 
 from conans.errors import ConanException
-from conans.model.values import Values
+from conans.model.values import SettingsValues
 
 
 def bad_value_msg(name, value, value_range):
@@ -280,7 +282,7 @@ class Settings(object):
 
     @property
     def values(self):
-        return Values.from_list(self.values_list)
+        return SettingsValues(OrderedDict(self.values_list))
 
     @property
     def values_list(self):
@@ -291,9 +293,6 @@ class Settings(object):
         return result
 
     def items(self):
-        return self.values_list
-
-    def iteritems(self):
         return self.values_list
 
     def update_values(self, vals):
@@ -310,8 +309,8 @@ class Settings(object):
 
     @values.setter
     def values(self, vals):
-        assert isinstance(vals, Values)
-        self.update_values(vals.as_list())
+        assert isinstance(vals, SettingsValues)
+        self.update_values(list(vals.items()))
 
     def constraint(self, constraint_def):
         """ allows to restrict a given Settings object with the input of another Settings object

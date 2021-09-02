@@ -1,5 +1,6 @@
 import os
 import platform
+import traceback
 from collections import OrderedDict, defaultdict
 
 from jinja2 import Environment, FileSystemLoader
@@ -11,6 +12,7 @@ from conans.model.env_info import EnvValues, unquote
 from conans.model.options import OptionsValues
 from conans.model.profile import Profile
 from conans.model.ref import ConanFileReference
+from conans.model.values import SettingsValues
 from conans.util.config_parser import ConfigParser
 from conans.util.files import load, mkdir
 from conans.util.log import logger
@@ -133,6 +135,7 @@ def read_profile(profile_name, cwd, default_folder):
     except ConanV2Exception:
         raise
     except ConanException as exc:
+        print(traceback.format_exc())
         raise ConanException("Error reading '%s' profile: %s" % (profile_name, exc))
 
 
@@ -312,12 +315,12 @@ def _profile_parse_args(settings, options, envs, conf):
     result = Profile()
     result.options = OptionsValues(options)
     result.env_values = env_values
-    result.settings = OrderedDict(settings)
+    result.settings = SettingsValues(OrderedDict(settings))
     if conf:
         result.conf = ConfDefinition()
         result.conf.loads("\n".join(conf))
 
     for pkg, values in package_settings.items():
-        result.package_settings[pkg] = OrderedDict(values)
+        result.package_settings[pkg] = SettingsValues(OrderedDict(values))
 
     return result
