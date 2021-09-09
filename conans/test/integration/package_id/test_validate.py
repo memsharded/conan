@@ -5,7 +5,7 @@ import unittest
 from conans.cli.exit_codes import ERROR_INVALID_CONFIGURATION
 from conans.client.graph.graph import BINARY_INVALID
 from conans.test.assets.genconanfile import GenConanfile
-from conans.test.utils.tools import TestClient
+from conans.test.utils.tools import TestClient, NO_SETTINGS_PACKAGE_ID
 
 
 class TestValidate(unittest.TestCase):
@@ -63,7 +63,7 @@ class TestValidate(unittest.TestCase):
         client.run("create . pkg/0.1@ -s os=Linux")
         self.assertIn("pkg/0.1: Package 'cb054d0b3e1ca595dc66bc2339d40f1f8f04ab31' created",
                       client.out)
-
+        # FIXME: This is really ugly, a create fallback to an existing compatible package
         client.run("create . pkg/0.1@ -s os=Windows")
         self.assertIn("pkg/0.1: Main binary package 'INVALID' missing. "
                       "Using compatible package 'cb054d0b3e1ca595dc66bc2339d40f1f8f04ab31'",
@@ -247,3 +247,48 @@ class TestValidate(unittest.TestCase):
                       "exist for this configuration):", client.out)
         self.assertIn("dep/0.1: Invalid ID: Windows not supported", client.out)
         self.assertIn("pkg/0.1: Invalid ID: Invalid transitive dependencies", client.out)
+
+    def test_validate_package_id(self):
+        client = TestClient()
+        conanfile = textwrap.dedent("""
+            from conans import ConanFile
+            from conans.errors import ConanInvalidConfiguration
+            class Pkg(ConanFile):
+                settings = "os"
+
+                def validate(self):
+                    if self.settings.os == "Windows":
+                        raise ConanInvalidConfiguration("Windows not supported")
+
+                def package_id(self):
+                    del self.info.settings.os
+            """)
+
+        client.save({"conanfile.py": conanfile})
+
+        client.run("create . pkg/0.1@ -s os=Linux")
+        self.assertIn("pkg/0.1: Package '{}' created".format(NO_SETTINGS_PACKAGE_ID), client.out)
+
+        error = client.run("create . pkg/0.1@ -s os=Windows", assert_error=True)
+        self.assertEqual(error, ERROR_INVALID_CONFIGURATION)
+        self.assertIn("pkg/0.1: Invalid ID: Windows not supported", client.out)
+
+        # install fails, even if there is a potential binary already available
+        error = client.run("install pkg/0.1@ -s os=Windows", assert_error=True)
+        self.assertEqual(error, ERROR_INVALID_CONFIGURATION)
+        self.assertIn("pkg/0.1: Invalid ID: Windows not supported", client.out)
+
+        # The "conan info" could show the necessary ID, and even find it, but nope, always invalid
+        client.run("info pkg/0.1@ -s os=Windows")
+        self.assertIn("ID: INVALID", client.out)
+        client.run("info pkg/0.1@ -s os=Windows --json=myjson")
+        myjson = json.loads(client.load("myjson"))
+        self.assertEqual(myjson[0]["binary"], BINARY_INVALID)
+        self.assertEqual(myjson[0]["id"], 'INVALID')
+
+        client.run("info pkg/0.1@ -s os=Windows --dry-build=pkg")
+        self.assertIn("ID: INVALID", client.out)
+        client.run("info pkg/0.1@ -s os=Windows --json=myjson --dry-build=pkg")
+        myjson = json.loads(client.load("myjson"))
+        self.assertEqual(myjson[0]["binary"], BINARY_INVALID)
+        self.assertEqual(myjson[0]["id"], 'INVALID')
