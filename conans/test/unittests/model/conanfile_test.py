@@ -1,9 +1,6 @@
 import unittest
 
-from mock import Mock
-
 from conans.model.conan_file import ConanFile
-from conans.model.env_info import EnvValues
 from conans.model.settings import Settings
 from conans.test.utils.tools import TestClient
 
@@ -14,8 +11,8 @@ class ConanFileTest(unittest.TestCase):
             if member.startswith('_') and not member.startswith("__"):
                 self.assertTrue(member.startswith('_conan'))
 
-        conanfile = ConanFile(Mock(), None)
-        conanfile.initialize(Settings(), EnvValues())
+        conanfile = ConanFile(None)
+        conanfile.initialize(Settings())
 
         for member in vars(conanfile):
             if member.startswith('_') and not member.startswith("__"):

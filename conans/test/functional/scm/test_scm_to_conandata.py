@@ -156,7 +156,7 @@ class SCMDataToConanDataTestCase(unittest.TestCase):
 
 
 class ParseSCMFromConanDataTestCase(unittest.TestCase):
-    loader = ConanFileLoader(runner=None, output=Mock())
+    loader = ConanFileLoader(runner=None)
 
     def test_parse_data(self):
         conanfile = textwrap.dedent("""
@@ -199,7 +199,6 @@ def test_auto_can_be_automated():
     commit = t.init_git_repo({'conanfile.py': conanfile,
                               'conandata.yml': ""})
     t.run_command('git remote add origin https://myrepo.com.git')
-    t.run("config set general.scm_to_conandata=1")
     t.run("export . pkg/1.0@")
 
     def _check(client):
@@ -217,14 +216,13 @@ def test_auto_can_be_automated():
 
     # Now try from another folder, doing a copy and using the env-vars
     t = TestClient(default_server_user=True)
-    t.run("config set general.scm_to_conandata=1")
     t.save({"conanfile.py": conanfile})
     with environment_append({"USER_EXTERNAL_URL": "https://myrepo.com.git",
                              "USER_EXTERNAL_COMMIT": commit}):
         t.run("export . pkg/1.0@")
     _check(t)
 
-    t.run("upload * -c")
+    t.run("upload * -c -r default")
     t.run("remove * -f")
     t.run("install pkg/1.0@ --build", assert_error=True)
     assert "pkg/1.0: SCM: Getting sources from url: 'https://myrepo.com.git'" in t.out
@@ -232,5 +230,4 @@ def test_auto_can_be_automated():
     with environment_append({"USER_EXTERNAL_URL": "https://other.different.url",
                              "USER_EXTERNAL_COMMIT": "invalid commit"}):
         t.run("install pkg/1.0@ --build", assert_error=True)
-        print(t.out)
         assert "pkg/1.0: SCM: Getting sources from url: 'https://myrepo.com.git'" in t.out

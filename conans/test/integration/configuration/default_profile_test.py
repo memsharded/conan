@@ -1,5 +1,8 @@
 import os
+import textwrap
 import unittest
+
+import pytest
 
 from conans.client import tools
 from conans.client.cache.cache import PROFILES_FOLDER
@@ -33,32 +36,44 @@ class MyConanfile(ConanFile):
         br = '''
 import os
 from conans import ConanFile
+from conan.tools.env import VirtualBuildEnv
 
 class MyConanfile(ConanFile):
     name = "mylib"
     version = "0.1"
 
     def build(self):
-        assert(os.environ.get("Value1") == "A")
-
+        build_env = VirtualBuildEnv(self).vars()
+        with build_env.apply():
+            assert(os.environ.get("Value1") == "A")
 '''
         tmp = temp_folder()
         default_profile_path = os.path.join(tmp, "myprofile")
-        save(default_profile_path, "[env]\nValue1=A")
+        save(default_profile_path, "[buildenv]\nValue1=A")
         client = TestClient()
-        client.run("config set general.default_profile='%s'" % default_profile_path)
+        save(client.cache.new_config_path, "core:default_profile={}".format(default_profile_path))
+
+        conan_conf = textwrap.dedent("""
+                [storage]
+                path = ./data
+                [general]
+                default_profile={}
+        """.format(default_profile_path))
+        client.save({"conan.conf": conan_conf}, path=client.cache.cache_folder)
+
         client.save({CONANFILE: br})
         client.run("export . lasote/stable")
         client.run('install mylib/0.1@lasote/stable --build')
 
         # Now use a name, in the default profile folder
         os.unlink(default_profile_path)
-        save(os.path.join(client.cache.profiles_path, "other"), "[env]\nValue1=A")
-        client.run("config set general.default_profile=other")
+        save(os.path.join(client.cache.profiles_path, "other"), "[buildenv]\nValue1=A")
+        save(client.cache.new_config_path, "core:default_profile=other")
         client.save({CONANFILE: br})
         client.run("export . lasote/stable")
         client.run('install mylib/0.1@lasote/stable --build')
 
+    @pytest.mark.xfail(reason="Winbash is broken for multi-profile. Ongoing https://github.com/conan-io/conan/pull/9755")
     def test_profile_applied_ok(self):
         br = '''
 import os
@@ -94,6 +109,7 @@ mypackage:option1=2
         cf = '''
 import os, platform
 from conans import ConanFile
+from conan.tools.env import VirtualBuildEnv
 
 class MyConanfile(ConanFile):
     name = "mypackage"
@@ -113,11 +129,12 @@ class MyConanfile(ConanFile):
 
     def build(self):
         # This has changed, the value from profile higher priority than build require
-        if platform.system() == "Windows":
-            self.run("set MyVAR")
-        else:
-            self.run("printenv MyVAR")
-
+        build_env = VirtualBuildEnv(self).vars()
+        with build_env.apply():
+            if platform.system() == "Windows":
+                self.run("set MyVAR")
+            else:
+                self.run("printenv MyVAR")
         '''
 
         # First apply just the default profile, we should get the env MYVAR="from_build_require"
@@ -143,11 +160,14 @@ br/1.0@lasote/stable"""
         conanfile = '''
 import os
 from conans import ConanFile
+from conan.tools.env import VirtualBuildEnv
 
 class MyConanfile(ConanFile):
 
     def build(self):
-        self.output.info(">>> env_variable={}".format(os.environ.get('env_variable')))
+        build_env = VirtualBuildEnv(self).vars()
+        with build_env.apply():
+            self.output.info(">>> env_variable={}".format(os.environ.get('env_variable')))
 '''
 
         client = TestClient()
@@ -155,7 +175,7 @@ class MyConanfile(ConanFile):
 
         # Test with the 'default' profile
         env_variable = "env_variable=profile_default"
-        save(client.cache.default_profile_path, "[env]\n" + env_variable)
+        save(client.cache.default_profile_path, "[buildenv]\n" + env_variable)
         client.run("create . name/version@user/channel")
         self.assertIn(">>> " + env_variable, client.out)
 
@@ -163,8 +183,8 @@ class MyConanfile(ConanFile):
         tmp = temp_folder()
         env_variable = "env_variable=profile_environment"
         default_profile_path = os.path.join(tmp, 'env_profile')
-        save(default_profile_path, "[env]\n" + env_variable)
-        with tools.environment_append({'CONAN_DEFAULT_PROFILE_PATH': default_profile_path}):
+        save(default_profile_path, "[buildenv]\n" + env_variable)
+        with tools.environment_append({'CONAN_DEFAULT_PROFILE': default_profile_path}):
             client.run("create . name/version@user/channel")
             self.assertIn(">>> " + env_variable, client.out)
 
@@ -174,17 +194,31 @@ class MyConanfile(ConanFile):
         self.assertFalse(os.path.isabs(rel_path))
         default_profile_path = os.path.join(client.cache_folder,
                                             PROFILES_FOLDER, rel_path)
-        save(default_profile_path, "[env]\n" + env_variable)
-        with tools.environment_append({'CONAN_DEFAULT_PROFILE_PATH': rel_path}):
+        save(default_profile_path, "[buildenv]\n" + env_variable)
+        with tools.environment_append({'CONAN_DEFAULT_PROFILE': rel_path}):
             client.run("create . name/version@user/channel")
             self.assertIn(">>> " + env_variable, client.out)
 
         # Use non existing path
         profile_path = os.path.join(tmp, "this", "is", "a", "path")
         self.assertTrue(os.path.isabs(profile_path))
-        with tools.environment_append({'CONAN_DEFAULT_PROFILE_PATH': profile_path}):
+        with tools.environment_append({'CONAN_DEFAULT_PROFILE': profile_path}):
             client.run("create . name/version@user/channel", assert_error=True)
-            self.assertIn("Environment variable 'CONAN_DEFAULT_PROFILE_PATH' must point to "
-                          "an existing profile file.", client.out)
+            self.assertIn("The default profile file doesn't exist", client.out)
 
 
+def test_conf_default_two_profiles():
+    client = TestClient()
+    save(os.path.join(client.cache.profiles_path, "mydefault"), "[settings]\nos=FreeBSD")
+    save(os.path.join(client.cache.profiles_path, "mydefault_build"), "[settings]\nos=Android")
+    global_conf = textwrap.dedent("""
+        core:default_profile=mydefault
+        core:default_build_profile=mydefault_build
+        """)
+    save(client.cache.new_config_path, global_conf)
+    client.save({"conanfile.txt": ""})
+    client.run("install .")
+    assert "Configuration (profile_host):" in client.out
+    assert "os=FreeBSD" in client.out
+    assert "Configuration (profile_build):" in client.out
+    assert "os=Android" in client.out

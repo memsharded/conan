@@ -5,8 +5,7 @@ from conan.tools.env.environment import ProfileEnvironment
 from conans.client import settings_preprocessor
 from conans.errors import ConanException
 from conans.model.conf import ConfDefinition
-from conans.model.env_info import EnvValues
-from conans.model.options import OptionsValues
+from conans.model.options import Options
 from conans.model.ref import ConanFileReference
 from conans.model.values import SettingsValues
 
@@ -19,8 +18,7 @@ class Profile(object):
         # Input sections, as defined by user profile files and command line
         self.settings = SettingsValues()
         self.package_settings = defaultdict(SettingsValues)
-        self.env_values = EnvValues()
-        self.options = OptionsValues()
+        self.options = Options()
         self.build_requires = OrderedDict()  # ref pattern: list of ref
         self.conf = ConfDefinition()
         self.buildenv = ProfileEnvironment()
@@ -30,11 +28,12 @@ class Profile(object):
         self._user_options = None
         self.dev_reference = None  # Reference of the package being develop
 
+    def __repr__(self):
+        return self.dumps()
+
     @property
     def user_options(self):
-        if self._user_options is None:
-            self._user_options = self.options.copy()
-        return self._user_options
+        return self.options
 
     def process_settings(self, cache, preprocess=True):
         assert self.processed_settings is None, "processed settings must be None"
@@ -74,7 +73,7 @@ class Profile(object):
             result.append("%s: %s" % (pattern, ", ".join(str(r) for r in req_list)))
 
         result.append("[env]")
-        result.append(self.env_values.dumps())
+        result.append("")
 
         if self.conf:
             result.append("[conf]")
@@ -89,10 +88,7 @@ class Profile(object):
     def compose_profile(self, other):
         self.update_settings(other.settings)
         self.update_package_settings(other.package_settings)
-        # this is the opposite
-        other.env_values.update(self.env_values)
-        self.env_values = other.env_values
-        self.options.update(other.options)
+        self.options.update_options(other.options)
         # It is possible that build_requires are repeated, or same package but different versions
         for pattern, req_list in other.build_requires.items():
             existing_build_requires = self.build_requires.get(pattern)

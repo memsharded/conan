@@ -2,6 +2,8 @@ import os
 import textwrap
 import unittest
 
+import pytest
+
 from conans.client import tools
 from conans.model.ref import PackageReference, ConanFileReference
 from conans.paths import CONANFILE
@@ -111,7 +113,13 @@ class TestPackageTest(unittest.TestCase):
         self.assertFalse(os.path.exists(default_build_dir))
 
         # Test if using a temporary test folder can be enabled via the config file.
-        client.run('config set general.temp_test_folder=True')
+        conan_conf = textwrap.dedent("""
+                                    [storage]
+                                    path = ./data
+                                    [general]
+                                    temp_test_folder=True
+                                """)
+        client.save({"conan.conf": conan_conf}, path=client.cache.cache_folder)
         client.run("test test_package Hello/0.1@lasote/stable")
         self.assertFalse(os.path.exists(default_build_dir))
 
@@ -124,43 +132,32 @@ class TestPackageTest(unittest.TestCase):
 
     def test_check_version(self):
         client = TestClient()
-        dep = textwrap.dedent("""
-            from conans import ConanFile
-            class Dep(ConanFile):
-                def package_info(self):
-                    self.cpp_info.name = "MyDep"
-            """)
-        client.save({CONANFILE: dep})
+        client.save({CONANFILE: GenConanfile()})
         client.run("create . dep/1.1@")
         conanfile = textwrap.dedent("""
             from conans import ConanFile
             class Pkg(ConanFile):
                 requires = "dep/1.1"
                 def build(self):
-                    info = self.dependencies["dep"].cpp_info
-                    self.output.info("BUILD Dep %s VERSION %s" %
-                        (info.get_name("txt"), info.version))
-                def package_info(self):
-                    self.cpp_info.names["txt"] = "MyHello"
+                    ref = self.dependencies["dep"].ref
+                    self.output.info("BUILD Dep VERSION %s" % ref.version)
             """)
         test_conanfile = textwrap.dedent("""
             from conans import ConanFile
             class Pkg(ConanFile):
                 def build(self):
-                    info = self.dependencies["hello"].cpp_info
-                    self.output.info("BUILD HELLO %s VERSION %s" %
-                        (info.get_name("txt"), info.version))
+                    ref = self.dependencies["hello"].ref
+                    self.output.info("BUILD HELLO VERSION %s" % ref.version)
                 def test(self):
-                    info = self.dependencies["hello"].cpp_info
-                    self.output.info("TEST HELLO %s VERSION %s" %
-                        (info.get_name("txt"), info.version))
+                    ref = self.dependencies["hello"].ref
+                    self.output.info("TEST HELLO VERSION %s" % ref.version)
             """)
         client.save({"conanfile.py": conanfile,
                      "test_package/conanfile.py": test_conanfile})
         client.run("create . hello/0.1@")
-        self.assertIn("hello/0.1: BUILD Dep MyDep VERSION 1.1", client.out)
-        self.assertIn("hello/0.1 (test package): BUILD HELLO MyHello VERSION 0.1", client.out)
-        self.assertIn("hello/0.1 (test package): TEST HELLO MyHello VERSION 0.1", client.out)
+        self.assertIn("hello/0.1: BUILD Dep VERSION 1.1", client.out)
+        self.assertIn("hello/0.1 (test package): BUILD HELLO VERSION 0.1", client.out)
+        self.assertIn("hello/0.1 (test package): TEST HELLO VERSION 0.1", client.out)
 
 
 class ConanTestTest(unittest.TestCase):
@@ -191,7 +188,7 @@ from conans import ConanFile
 
 class HelloTestConan(ConanFile):
     def test(self):
-        self.output.warn("Tested ok!")
+        self.output.warning("Tested ok!")
 ''', "Hello/0.1@conan/stable")
         self.assertIn("Tested ok!", client.out)
 
@@ -204,33 +201,32 @@ class HelloConan(ConanFile):
     name = "Hello"
     version = "0.1"
     def package_info(self):
-        self.buildenv_info.append_path("PYTHONPATH", "new/pythonpath/value")
+        self.buildenv_info.define("MYVAR", "new/pythonpath/value")
+
         '''
         test_package = '''
 import os, platform
 from conans import ConanFile
+from conan.tools.env import VirtualBuildEnv
 
 class HelloTestConan(ConanFile):
     test_type = "build_requires"
     generators = "VirtualBuildEnv"
 
     def build(self):
-        if platform.system() == "Windows":
-            self.run("set PYTHONPATH")
-        else:
-            self.run("printenv PYTHONPATH")
+        build_env = VirtualBuildEnv(self).vars()
+        with build_env.apply():
+            assert("new/pythonpath/value" in os.environ["MYVAR"])
 
     def test(self):
-        if platform.system() == "Windows":
-            self.run("set PYTHONPATH")
-        else:
-            self.run("printenv PYTHONPATH")
+        build_env = VirtualBuildEnv(self).vars()
+        with build_env.apply():
+            assert("new/pythonpath/value" in os.environ["MYVAR"])
 '''
 
         client.save({"conanfile.py": conanfile, "test_package/conanfile.py": test_package})
         client.run("export . lasote/testing")
         client.run("test test_package Hello/0.1@lasote/testing --build missing")
-        assert "new/pythonpath/value" in client.out
 
     def test_fail_test_package(self):
         client = TestClient()

@@ -1,8 +1,7 @@
 import os
 import textwrap
 
-from conan.tools.cmake.cmakedeps.templates import CMakeDepsFileTemplate, get_component_alias, \
-    get_target_namespace
+from conan.tools.cmake.cmakedeps.templates import CMakeDepsFileTemplate
 from conan.tools.cmake.utils import get_file_name
 
 """
@@ -16,7 +15,8 @@ class ConfigDataTemplate(CMakeDepsFileTemplate):
 
     @property
     def filename(self):
-        data_fname = "{}-{}".format(self.file_name, self.configuration.lower())
+        data_fname = "" if not self.find_module_mode else "module-"
+        data_fname += "{}-{}".format(self.file_name, self.configuration.lower())
         if self.arch:
             data_fname += "-{}".format(self.arch)
         data_fname += "-data.cmake"
@@ -66,6 +66,7 @@ class ConfigDataTemplate(CMakeDepsFileTemplate):
               set({{ pkg_name }}_DEFINITIONS{{ config_suffix }} {{ global_cpp.defines }})
               set({{ pkg_name }}_SHARED_LINK_FLAGS{{ config_suffix }} {{ global_cpp.sharedlinkflags_list }})
               set({{ pkg_name }}_EXE_LINK_FLAGS{{ config_suffix }} {{ global_cpp.exelinkflags_list }})
+              set({{ pkg_name }}_OBJECTS{{ config_suffix }} {{ global_cpp.objects_list }})
               set({{ pkg_name }}_COMPILE_DEFINITIONS{{ config_suffix }} {{ global_cpp.compile_definitions }})
               set({{ pkg_name }}_COMPILE_OPTIONS_C{{ config_suffix }} {{ global_cpp.cflags_list }})
               set({{ pkg_name }}_COMPILE_OPTIONS_CXX{{ config_suffix }} {{ global_cpp.cxxflags_list}})
@@ -86,6 +87,7 @@ class ConfigDataTemplate(CMakeDepsFileTemplate):
               set({{ pkg_name }}_{{ comp_name }}_LIB_DIRS{{ config_suffix }} {{ cpp.lib_paths }})
               set({{ pkg_name }}_{{ comp_name }}_RES_DIRS{{ config_suffix }} {{ cpp.res_paths }})
               set({{ pkg_name }}_{{ comp_name }}_DEFINITIONS{{ config_suffix }} {{ cpp.defines }})
+              set({{ pkg_name }}_{{ comp_name }}_OBJECTS{{ config_suffix }} {{ cpp.objects_list }})
               set({{ pkg_name }}_{{ comp_name }}_COMPILE_DEFINITIONS{{ config_suffix }} {{ cpp.compile_definitions }})
               set({{ pkg_name }}_{{ comp_name }}_COMPILE_OPTIONS_C{{ config_suffix }} "{{ cpp.cflags_list }}")
               set({{ pkg_name }}_{{ comp_name }}_COMPILE_OPTIONS_CXX{{ config_suffix }} "{{ cpp.cxxflags_list }}")
@@ -104,7 +106,7 @@ class ConfigDataTemplate(CMakeDepsFileTemplate):
         return ret
 
     def get_global_cpp_cmake(self):
-        global_cppinfo = self.conanfile.new_cpp_info.copy()
+        global_cppinfo = self.conanfile.cpp_info.copy()
         global_cppinfo.aggregate_components()
         pfolder_var_name = "{}_PACKAGE_FOLDER{}".format(self.pkg_name, self.config_suffix)
         return DepsCppCmake(global_cppinfo, pfolder_var_name, self.require)
@@ -112,8 +114,10 @@ class ConfigDataTemplate(CMakeDepsFileTemplate):
     def get_required_components_cpp(self):
         """Returns a list of (component_name, DepsCppCMake)"""
         ret = []
-        sorted_comps = self.conanfile.new_cpp_info.get_sorted_components()
+        sorted_comps = self.conanfile.cpp_info.get_sorted_components()
 
+        direct_visible_host = self.conanfile.dependencies.filter({"build": False, "visible": True,
+                                                                  "direct": True})
         for comp_name, comp in sorted_comps.items():
             pfolder_var_name = "{}_PACKAGE_FOLDER{}".format(self.pkg_name, self.config_suffix)
             deps_cpp_cmake = DepsCppCmake(comp, pfolder_var_name)
@@ -121,15 +125,15 @@ class ConfigDataTemplate(CMakeDepsFileTemplate):
             for require in comp.requires:
                 if "::" in require:  # Points to a component of a different package
                     pkg, cmp_name = require.split("::")
-                    req = self.conanfile.dependencies.direct_host[pkg]
-                    public_comp_deps.append("{}::{}".format(get_target_namespace(req),
-                                                            get_component_alias(req, cmp_name)))
+                    req = direct_visible_host[pkg]
+                    public_comp_deps.append("{}::{}".format(self.get_target_namespace(req),
+                                                            self.get_component_alias(req, cmp_name)))
                 else:  # Points to a component of same package
                     public_comp_deps.append("{}::{}".format(self.target_namespace,
-                                                            get_component_alias(self.conanfile,
-                                                                                 require)))
+                                                            self.get_component_alias(self.conanfile,
+                                                                                     require)))
             deps_cpp_cmake.public_deps = " ".join(public_comp_deps)
-            component_rename = get_component_alias(self.conanfile, comp_name)
+            component_rename = self.get_component_alias(self.conanfile, comp_name)
             ret.append((component_rename, deps_cpp_cmake))
         ret.reverse()
         return ret
@@ -138,14 +142,15 @@ class ConfigDataTemplate(CMakeDepsFileTemplate):
         if self.conanfile.is_build_context:
             return []
         ret = []
-        direct_host = self.conanfile.dependencies.direct_host
-        if self.conanfile.new_cpp_info.required_components:
-            for dep_name, _ in self.conanfile.new_cpp_info.required_components:
+        direct_host = self.conanfile.dependencies.filter({"build": False, "visible": True,
+                                                          "direct": True})
+        if self.conanfile.cpp_info.required_components:
+            for dep_name, _ in self.conanfile.cpp_info.required_components:
                 if dep_name and dep_name not in ret:  # External dep
                     req = direct_host[dep_name]
-                    ret.append(get_file_name(req))
+                    ret.append(get_file_name(req, self.find_module_mode))
         elif direct_host:
-            ret = [get_file_name(r) for r in direct_host.values()]
+            ret = [get_file_name(r, self.find_module_mode) for r in direct_host.values()]
 
         return ret
 
@@ -194,7 +199,6 @@ class DepsCppCmake(object):
         self.res_paths = join_paths(cpp_info.resdirs)
         self.bin_paths = join_paths(cpp_info.bindirs)
         self.build_paths = join_paths(cpp_info.builddirs)
-        self.src_paths = join_paths(cpp_info.srcdirs)
         self.framework_paths = join_paths(cpp_info.frameworkdirs)
         self.libs = join_flags(" ", cpp_info.libs)
         self.system_libs = join_flags(" ", cpp_info.system_libs)
@@ -218,6 +222,7 @@ class DepsCppCmake(object):
         # frameworks should be declared with cppinfo.frameworks not "-framework Foundation"
         self.sharedlinkflags_list = join_flags(";", cpp_info.sharedlinkflags)
         self.exelinkflags_list = join_flags(";", cpp_info.exelinkflags)
+        self.objects_list = join_paths(cpp_info.objects)
 
         if require and not require.libs and not require.headers:
             self.defines = ""
@@ -226,6 +231,7 @@ class DepsCppCmake(object):
             self.cflags_list = ""
             self.sharedlinkflags_list = ""
             self.exelinkflags_list = ""
+            self.objects_list = ""
 
         build_modules = cpp_info.get_property("cmake_build_modules", "CMakeDeps") or []
         self.build_modules_paths = join_paths(build_modules)

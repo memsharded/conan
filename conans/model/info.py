@@ -5,8 +5,7 @@ from conans.client.graph.graph import BINARY_INVALID
 from conans.client.tools.win import MSVS_DEFAULT_TOOLSETS_INVERSE
 from conans.errors import ConanException
 from conans.model.dependencies import UserRequirementsDict
-from conans.model.env_info import EnvValues
-from conans.model.options import OptionsValues
+from conans.model.options import Options
 from conans.model.ref import PackageReference, ConanFileReference
 from conans.model.values import SettingsValues
 from conans.paths import CONANINFO
@@ -408,7 +407,7 @@ class ConanInfo(object):
         result = ConanInfo()
         result.invalid = self.invalid
         result.settings = self.settings.copy()
-        result.options = self.options.copy()
+        result.options = self.options.copy_conaninfo_options()
         result.requires = self.requires.copy()
         result.build_requires = self.build_requires.copy()
         result.python_requires = self.python_requires.copy()
@@ -422,15 +421,11 @@ class ConanInfo(object):
         result.full_settings = settings
         # FIXME: Poor copy creation to not break more tests, will be removed when full_settings is removed
         result.settings = SettingsValues(settings._values.copy())
-        result.full_options = options
-        result.options = options.copy()
-        result.options.clear_indirect()
+        result.options = options.copy_conaninfo_options()
         result.requires = reqs_info
         result.build_requires = build_requires_info
         result.full_requires = _PackageReferenceList()
-        result.env_values = EnvValues()
         result.vs_toolset_compatible()
-        result.discard_build_settings()
         result.default_std_matching()
         result.python_requires = PythonRequiresInfo(python_requires, default_python_requires_id_mode)
         return result
@@ -438,23 +433,19 @@ class ConanInfo(object):
     @staticmethod
     def loads(text):
         # This is used for search functionality, search prints info from this file
-        parser = ConfigParser(text, ["settings", "full_settings", "options", "full_options",
+        parser = ConfigParser(text, ["settings", "full_settings", "options",
                                      "requires", "full_requires", "env"],
                               raise_unexpected_field=False)
         result = ConanInfo()
         result.invalid = None
         result.settings = SettingsValues.loads(parser.settings)
-        result.full_settings = SettingsValues.loads(parser.full_settings)
-        result.options = OptionsValues.loads(parser.options)
-        result.full_options = OptionsValues.loads(parser.full_options)
+        result.options = Options.loads(parser.options)
         result.full_requires = _PackageReferenceList.loads(parser.full_requires)
         # Requires after load are not used for any purpose, CAN'T be used, they are not correct
         # FIXME: remove this uglyness
         result.requires = RequirementsInfo({})
         result.build_requires = RequirementsInfo({})
 
-        # TODO: Missing handling paring of requires, but not necessary now
-        result.env_values = EnvValues.loads(parser.env)
         return result
 
     def dumps(self):
@@ -475,16 +466,14 @@ class ConanInfo(object):
         result.append("\n[full_requires]")
         result.append(indent(self.full_requires.dumps()))
         result.append("\n[full_options]")
-        result.append(indent(self.full_options.dumps()))
-        result.append("\n[env]")
-        result.append(indent(self.env_values.dumps()))
+        result.append(indent(self.options.dumps()))  # Keep it as close as possible to not break IDs
+        result.append("\n[env]\n")
 
         return '\n'.join(result) + "\n"
 
     def clone(self):
         q = self.copy()
         q.full_settings = self.full_settings.copy()
-        q.full_options = self.full_options.copy()
         q.full_requires = _PackageReferenceList.loads(self.full_requires.dumps())
         return q
 
@@ -533,7 +522,7 @@ class ConanInfo(object):
             result.append(self.conf.sha)
         result.append("")  # Append endline so file ends with LF
         text = '\n'.join(result)
-        #print("HASING ", text)
+        # print("HASING ", text)
         package_id = sha1(text.encode())
         return package_id
 
@@ -542,7 +531,7 @@ class ConanInfo(object):
         This info will be shown in search results.
         """
         conan_info_json = {"settings": dict(self.settings.serialize()),
-                           "options": dict(self.options.serialize()["options"]),
+                           "options": dict(self.options.serialize())["options"],
                            "full_requires": self.full_requires.serialize()
                            }
         return conan_info_json
@@ -565,7 +554,8 @@ class ConanInfo(object):
         version = str(version)[:4]
         _visuals = {'19.0': '14',
                     '19.1': '15',
-                    '19.2': '16'}
+                    '19.2': '16',
+                    '19.3': '17'}
         compatible.settings.compiler.version = _visuals[version]
         runtime = "MT" if runtime == "static" else "MD"
         if  runtime_type == "Debug":
@@ -591,18 +581,6 @@ class ConanInfo(object):
             return
         self.settings.compiler.version = self.full_settings.compiler.version
         self.settings.compiler.toolset = self.full_settings.compiler.toolset
-
-    def discard_build_settings(self):
-        # When os is defined, os_build is irrelevant for the consumer.
-        # only when os_build is alone (installers, etc) it has to be present in the package_id
-        if self.full_settings.os and self.full_settings.os_build:
-            del self.settings.os_build
-        if self.full_settings.arch and self.full_settings.arch_build:
-            del self.settings.arch_build
-
-    def include_build_settings(self):
-        self.settings.os_build = self.full_settings.os_build
-        self.settings.arch_build = self.full_settings.arch_build
 
     def default_std_matching(self):
         """
