@@ -573,7 +573,7 @@ class PublicBuildRequiresTest(GraphManagerTest):
 
         deps_graph = self.build_graph(GenConanfile("app", "0.1").with_requires("libb/0.1",
                                                                                "libc/0.1")
-                                      .with_build_requirement("cmake/0.2", override=True))
+                                      .with_build_requirement("cmake/0.2", visible=True, override=True))
 
         self.assertEqual(4, len(deps_graph.nodes))
         app = deps_graph.root

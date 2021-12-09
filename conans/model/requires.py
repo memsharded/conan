@@ -81,7 +81,6 @@ class Requirement:
                  (self.libs and other.libs) or
                  (self.run and other.run) or
                  (self.visible and other.visible) or
-                 self.override or
                  (self.ref == other.ref)))
 
     def aggregate(self, other):
