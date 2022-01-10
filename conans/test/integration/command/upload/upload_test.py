@@ -124,8 +124,7 @@ class UploadTest(unittest.TestCase):
         client.save({"conanfile.py": conanfile})
         client.run("create . user/testing")
         client.run("upload hello0/1.2.1@user/testing:{} -c -r default".format(NO_SETTINGS_PACKAGE_ID))
-        self.assertIn("Uploading hello0/1.2.1@user/testing:357add7d387f11a959f3ee7d4fc9c2487dbaa604",
-                      client.out)
+        self.assertIn(f"Uploading hello0/1.2.1@user/testing:{NO_SETTINGS_PACKAGE_ID}", client.out)
 
     def test_pattern_upload(self):
         client = TestClient(default_server_user=True)
@@ -331,7 +330,7 @@ class UploadTest(unittest.TestCase):
         self.assertNotIn("Uploading conaninfo.txt", client2.out)  # conaninfo NOT changed
         self.assertNotIn("Uploading conan_package.tgz", client2.out)
         self.assertIn("hello0/1.2.1@frodo/stable#3a26992ac7bfd9de8ca9a821a6ca54dc:"
-                      "357add7d387f11a959f3ee7d4fc9c2487dbaa604#9040c90925bc0cb0a3ba3ce7db39166b"
+                      f"{NO_SETTINGS_PACKAGE_ID}#9040c90925bc0cb0a3ba3ce7db39166b"
                       " already in server, skipping upload", client2.out)
 
         # first client tries to upload again
@@ -345,7 +344,7 @@ class UploadTest(unittest.TestCase):
         self.assertNotIn("Uploading conaninfo.txt", client.out)  # conaninfo NOT changed
         self.assertNotIn("Uploading conan_package.tgz", client2.out)
         self.assertIn("hello0/1.2.1@frodo/stable#3a26992ac7bfd9de8ca9a821a6ca54dc:"
-                      "357add7d387f11a959f3ee7d4fc9c2487dbaa604#9040c90925bc0cb0a3ba3ce7db39166b"
+                      f"{NO_SETTINGS_PACKAGE_ID}#9040c90925bc0cb0a3ba3ce7db39166b"
                       " already in server, skipping upload", client2.out)
 
     def test_upload_no_overwrite_all(self):
@@ -367,7 +366,7 @@ class UploadTest(unittest.TestCase):
         self.assertIn("hello/1.0@frodo/stable#66e74d8694b15fb8a7ed8fbc55c242a0 already "
                       "in server, skipping upload", client.out)
         self.assertIn("hello/1.0@frodo/stable#66e74d8694b15fb8a7ed8fbc55c242a0:"
-                      "357add7d387f11a959f3ee7d4fc9c2487dbaa604#a397cb03d51fb3b129c78d2968e2676f"
+                      f"{NO_SETTINGS_PACKAGE_ID}#a397cb03d51fb3b129c78d2968e2676f"
                       " already in server, skipping upload", client.out)
 
     @pytest.mark.xfail(reason="Tests using the Search command are temporarely disabled")

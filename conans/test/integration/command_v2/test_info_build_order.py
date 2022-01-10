@@ -2,7 +2,7 @@ import json
 import textwrap
 
 from conans.test.assets.genconanfile import GenConanfile
-from conans.test.utils.tools import TestClient
+from conans.test.utils.tools import TestClient, NO_SETTINGS_PACKAGE_ID
 
 
 def test_info_build_order():
@@ -22,7 +22,7 @@ def test_info_build_order():
                 "depends": [],
                 "packages": [
                     {
-                        "package_id": "357add7d387f11a959f3ee7d4fc9c2487dbaa604",
+                        "package_id": NO_SETTINGS_PACKAGE_ID,
                         'prev': None,
                         'filenames': [],
                         "context": "host",
@@ -71,7 +71,7 @@ def test_info_build_order_build_require():
                 "depends": [],
                 "packages": [
                     {
-                        "package_id": "357add7d387f11a959f3ee7d4fc9c2487dbaa604",
+                        "package_id": NO_SETTINGS_PACKAGE_ID,
                         'prev': None,
                         'filenames': [],
                         "context": "build",
@@ -89,7 +89,7 @@ def test_info_build_order_build_require():
                 ],
                 "packages": [
                     {
-                        "package_id": "357add7d387f11a959f3ee7d4fc9c2487dbaa604",
+                        "package_id": NO_SETTINGS_PACKAGE_ID,
                         'prev': None,
                         'filenames': [],
                         "context": "host",
@@ -159,7 +159,7 @@ def test_info_build_order_options():
                 ],
                 "packages": [
                     {
-                        "package_id": "357add7d387f11a959f3ee7d4fc9c2487dbaa604",
+                        "package_id": NO_SETTINGS_PACKAGE_ID,
                         'prev': None,
                         'filenames': [],
                         "context": "host",
@@ -176,7 +176,7 @@ def test_info_build_order_options():
                 ],
                 "packages": [
                     {
-                        "package_id": "357add7d387f11a959f3ee7d4fc9c2487dbaa604",
+                        "package_id": NO_SETTINGS_PACKAGE_ID,
                         'prev': None,
                         'filenames': [],
                         "context": "host",
@@ -215,7 +215,7 @@ def test_info_build_order_merge_multi_product():
                 "depends": [],
                 "packages": [
                     {
-                        "package_id": "357add7d387f11a959f3ee7d4fc9c2487dbaa604",
+                        "package_id": NO_SETTINGS_PACKAGE_ID,
                         'prev': None,
                         'filenames': ["bo1", "bo2"],
                         "context": "host",
@@ -298,7 +298,7 @@ def test_info_build_order_merge_conditionals():
                 "depends": [],
                 "packages": [
                     {
-                        "package_id": "357add7d387f11a959f3ee7d4fc9c2487dbaa604",
+                        "package_id": NO_SETTINGS_PACKAGE_ID,
                         'prev': None,
                         'filenames': ["bo_win"],
                         "context": "host",
@@ -312,7 +312,7 @@ def test_info_build_order_merge_conditionals():
                 "depends": [],
                 "packages": [
                     {
-                        "package_id": "357add7d387f11a959f3ee7d4fc9c2487dbaa604",
+                        "package_id": NO_SETTINGS_PACKAGE_ID,
                         'prev': None,
                         'filenames': ["bo_nix"],
                         "context": "host",

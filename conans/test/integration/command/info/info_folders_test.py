@@ -79,10 +79,10 @@ class InfoFoldersTest(unittest.TestCase):
 
         client.run("info pkg/0.1@user/testing --paths -o pkg:myOption=False")
         out = str(client.out).replace("\\", "/")
-        self.assertIn("ID: 357add7d387f11a959f3ee7d4fc9c2487dbaa604", out)
+        self.assertIn(f"ID: {NO_SETTINGS_PACKAGE_ID}", out)
         self.assertIn("BuildID: c74f42995b9d1452f1534f88b6c56ed7102212d0", out)
         self.assertIn("pkg/0.1/user/testing/build/c74f42995b9d1452f1534f88b6c56ed7102212d0", out)
-        self.assertIn("pkg/0.1/user/testing/package/357add7d387f11a959f3ee7d4fc9c2487dbaa604", out)
+        self.assertIn(f"pkg/0.1/user/testing/package/{NO_SETTINGS_PACKAGE_ID}", out)
 
     def test_deps_basic(self):
         client = TestClient()
