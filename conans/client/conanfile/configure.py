@@ -18,6 +18,7 @@ def run_configure_method(conanfile, down_options, down_ref, ref):
             conanfile.config_options()
 
         conanfile.options.propagate_upstream(down_options, down_ref, ref)
+        conanfile.build_requires_options = conanfile.options.values
 
         if hasattr(conanfile, "config"):
             with conanfile_exception_formatter(str(conanfile), "config"):

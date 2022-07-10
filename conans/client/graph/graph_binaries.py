@@ -317,7 +317,7 @@ class GraphBinariesAnalyzer(object):
             conanfile.requires[ref.name].ref = ref
 
         # There might be options that are not upstream, backup them, might be for build-requires
-        conanfile.build_requires_options = conanfile.options.values
+        # conanfile.build_requires_options = conanfile.options.values
         conanfile.options.clear_unused(transitive_reqs)
         conanfile.options.freeze()
 

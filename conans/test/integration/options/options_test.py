@@ -343,3 +343,21 @@ class MyConanFile(ConanFile):
         client.save({"conanfile.py": consumer})
         client.run("create . pkg/0.1@user/testing")
         self.assertIn("pkg/0.1@user/testing: Created package ", client.out)
+
+
+def test_override_options_failure():
+    c = TestClient()
+    c.save({"openssl1/conanfile.py": GenConanfile("openssl", "1.1"),
+            "openssl3/conanfile.py": GenConanfile("openssl", "3.0")
+           .with_option("fips", [True, False])
+           .with_default_option("fips", False),
+            "cmake/conanfile.py": GenConanfile("cmake", "1.0").with_requires("openssl/1.1"),
+            "pkg/conanfile.py": GenConanfile("pkg", "0.1").with_requires("openssl/3.0"),
+            "consumer/conanfile.py": GenConanfile().with_build_requires("cmake/1.0")
+            .with_requires("pkg/0.1")})
+    c.run("create openssl1")
+    c.run("create openssl3")
+    c.run("create cmake")
+    c.run("create pkg")
+    c.run("install consumer -s:b os=Windows")
+    print(c.out)
