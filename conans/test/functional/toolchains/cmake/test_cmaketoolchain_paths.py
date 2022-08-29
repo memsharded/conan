@@ -191,6 +191,7 @@ def test_cmaketoolchain_path_find_package_real_config(settings, find_root_path_m
             def build(self):
                 cmake = CMake(self)
                 cmake.configure()
+                cmake.build()
 
             def package(self):
                 cmake = CMake(self)
@@ -201,9 +202,9 @@ def test_cmaketoolchain_path_find_package_real_config(settings, find_root_path_m
         """)
     cmake = textwrap.dedent("""
         cmake_minimum_required(VERSION 3.15)
-        project(MyHello NONE)
+        project(MyHello CXX)
 
-        add_library(hello INTERFACE)
+        add_library(hello hello.cpp)
         install(TARGETS hello EXPORT helloConfig)
         export(TARGETS hello
             NAMESPACE hello::
@@ -214,28 +215,73 @@ def test_cmaketoolchain_path_find_package_real_config(settings, find_root_path_m
             NAMESPACE hello::
         )
         """)
-    client.save({"conanfile.py": conanfile, "CMakeLists.txt": cmake})
+    client.save({"conanfile.py": conanfile, "CMakeLists.txt": cmake, "hello.cpp": ""})
     client.run("create . hello/0.1@ -pr:b default {}".format(settings))
 
     consumer = textwrap.dedent("""
         cmake_minimum_required(VERSION 3.15)
-        project(MyHello NONE)
+        project(MyHello CXX)
 
         find_package(hello REQUIRED)
+
+        add_library(consumer consumer.cpp)
+        target_link_libraries(consumer PUBLIC hello)
+        install(TARGETS consumer EXPORT consumerConfig)
+        export(TARGETS consumer
+            NAMESPACE consumer::
+            FILE "${CMAKE_CURRENT_BINARY_DIR}/consumerConfig.cmake"
+        )
+        install(EXPORT consumerConfig
+            DESTINATION "${CMAKE_INSTALL_PREFIX}/consumer/cmake"
+            NAMESPACE consumer::
+        )
         """)
 
-    client.save({"CMakeLists.txt": consumer}, clean_first=True)
-    client.run("install hello/0.1@ -g CMakeToolchain -pr:b default {}".format(settings))
+    consumer_conanfile = textwrap.dedent("""
+           from conans import ConanFile
+           from conan.tools.cmake import CMake
+           import os
+           class TestConan(ConanFile):
+               name = "consumer"
+               version = "0.1"
+               settings = "os", "compiler", "build_type", "arch"
+               exports_sources = "*"
+               generators = "CMakeToolchain"
+               requires = "hello/0.1"
+
+               def layout(self):
+                   pass
+
+               def build(self):
+                   cmake = CMake(self)
+                   cmake.configure()
+                   cmake.build()
+
+               def package(self):
+                   cmake = CMake(self)
+                   cmake.install()
+
+               def package_info(self):
+                   self.cpp_info.builddirs.append(os.path.join("consumer", "cmake"))
+           """)
+
+    client.save({"CMakeLists.txt": consumer,
+                 "conanfile.py": consumer_conanfile,
+                 "consumer.cpp": ""}, clean_first=True)
+    client.run("install . -pr:b default {}".format(settings))
     with client.chdir("build"):
         client.run_command(_cmake_command_toolchain(find_root_path_modes))
     # If it didn't fail, it found the helloConfig.cmake
     assert "Conan: Target declared" not in client.out
 
     # If using the CMakeDeps generator, the in-package .cmake will be ignored
-    client.run("install hello/0.1@ -g CMakeToolchain -g CMakeDeps -pr:b default {}".format(settings))
+    client.run("install . -g CMakeDeps -pr:b default {}".format(settings))
     with client.chdir("build2"):  # A clean folder, not the previous one, CMake cache doesnt affect
         client.run_command(_cmake_command_toolchain(find_root_path_modes))
     assert "Conan: Target declared 'hello::hello'" in client.out
+
+    client.run("create .")
+    print(client.out)
 
 
 @pytest.mark.tool_cmake
