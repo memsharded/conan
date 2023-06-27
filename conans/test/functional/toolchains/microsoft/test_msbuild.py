@@ -132,7 +132,6 @@ myapp_vcxproj = r"""<?xml version="1.0" encoding="utf-8"?>
   If it goes after, the Toolset definition is ignored -->
   <ImportGroup Label="PropertySheets">
     <Import Project="..\conan\conan_hello.props" />
-    <Import Project="..\conan\conantoolchain.props" />
   </ImportGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
@@ -426,10 +425,20 @@ class TestWin:
     def test_toolchain_win_vs2017(self, compiler, version, runtime, cppstd):
         self.check_toolchain_win(compiler, version, runtime, cppstd, ide_version=15)
 
+    @pytest.mark.tool("cmake")
+    @pytest.mark.tool("visual_studio", "16")
+    @pytest.mark.parametrize("compiler,version,runtime,cppstd",
+                             [("msvc", "191", "static", "17"),
+                              ("msvc", "190", "static", "14")])
+    def test_toolchain_win_vs2019(self, compiler, version, runtime, cppstd):
+        self.check_toolchain_win(compiler, version, runtime, cppstd, ide_version=16)
+
     @pytest.mark.tool("cmake", "3.21")
     @pytest.mark.tool("visual_studio", "17")
     @pytest.mark.parametrize("compiler,version,runtime,cppstd",
-                             [("msvc", "193", "static", "17")])
+                             [("msvc", "193", "static", "17"),
+                              ("msvc", "192", "static", "14"),
+                              ("msvc", "191", "static", "14")])
     def test_toolchain_win_vs2022(self, compiler, version, runtime, cppstd):
         self.check_toolchain_win(compiler, version, runtime, cppstd, ide_version=17)
 
@@ -573,14 +582,19 @@ class TestWin:
             else:
                 configuration = build_type
 
+            toolchain = os.path.join(client.current_folder, "conan", "conantoolchain.props")
             # The "conan build" command is not good enough, cannot do the switch between configs
             cmd = ('set "VSCMD_START_DIR=%%CD%%" && '
                    '"%s" x64 && msbuild "MyProject.sln" /p:Configuration="%s" '
-                   '/p:Platform=%s ' % (vcvars_path, configuration, platform_arch))
+                   '/p:Platform=%s /p:ForceImportBeforeCppProps="%s"'
+                   % (vcvars_path, configuration, platform_arch, toolchain))
             client.run_command(cmd)
+            print(client.out)
             assert "[vcvarsall.bat] Environment initialized for: 'x64'" in client.out
 
+            print(client.current_folder)
             self._run_app(client, arch, build_type, shared)
+            print(client.out)
             check_exe_run(client.out, "main", "msvc", "192", build_type, arch, "17",
                           {"DEFINITIONS_BOTH": "True",
                            "DEFINITIONS_CONFIG": build_type})
