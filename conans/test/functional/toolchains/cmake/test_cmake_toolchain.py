@@ -1354,7 +1354,13 @@ def test_inject_user_toolchain_profile():
     assert "-- MYVAR1 MYVALUE1!!" in client.out
 
 
-def test_no_build_type():
+@pytest.mark.parametrize("conanfile_settings",
+                         ['"os", "compiler", "arch"',
+                          '"os", "compiler", "arch", "build_type"'
+                          ])
+@pytest.mark.parametrize("tc_cache_variables",
+                         [True, False])
+def test_build_type(conanfile_settings, tc_cache_variables):
     client = TestClient()
 
     conanfile = textwrap.dedent("""
@@ -1364,7 +1370,7 @@ def test_no_build_type():
         class AppConan(ConanFile):
             name = "pkg"
             version = "1.0"
-            settings = "os", "compiler", "arch"
+            settings = {}
             exports_sources = "CMakeLists.txt"
 
             def layout(self):
@@ -1372,8 +1378,8 @@ def test_no_build_type():
 
             def generate(self):
                 tc = CMakeToolchain(self)
-                if not tc.is_multi_configuration:
-                    tc.cache_variables["CMAKE_BUILD_TYPE"] = "Release"
+                if {} and not tc.is_multi_configuration:
+                    tc.cache_variables["CMAKE_BUILD_TYPE"] = "MinSizeRel"
                 tc.generate()
 
             def build(self):
@@ -1386,14 +1392,36 @@ def test_no_build_type():
                 cmake = CMake(self)
                 build_type = "Release" if cmake.is_multi_configuration else None
                 cmake.install(build_type=build_type)
-        """)
+        """.format(conanfile_settings, tc_cache_variables))
 
     cmake = """
         cmake_minimum_required(VERSION 3.15)
         project(pkg LANGUAGES NONE)
+        message(STATUS "CMAKE_BUILD_TYPE: '${CMAKE_BUILD_TYPE}'")
     """
 
     client.save({"conanfile.py": conanfile,
                  "CMakeLists.txt": cmake})
-    client.run("create .")
+
+    # priorities for value of CMAKE_BUILD_TYPE:
+    # 1. tc.cache_variables["CMAKE_BUILD_TYPE"] if specified
+    # 2. 'build_type' if build_type is considered under settings
+    # 3. None (empty)
+
+    client.run("create .") # same as: -s build_type=Release
     assert "Don't specify 'build_type' at build time" not in client.out
+    if tc_cache_variables:
+        assert "CMAKE_BUILD_TYPE: 'MinSizeRel'" in client.out
+    elif "build_type" in conanfile_settings:
+        assert "CMAKE_BUILD_TYPE: 'Release'" in client.out
+    else:
+        assert "CMAKE_BUILD_TYPE: ''" in client.out
+
+    client.run("create . -s build_type=Debug")
+    assert "Don't specify 'build_type' at build time" not in client.out
+    if tc_cache_variables:
+        assert "CMAKE_BUILD_TYPE: 'MinSizeRel'" in client.out
+    elif "build_type" in conanfile_settings:
+        assert "CMAKE_BUILD_TYPE: 'Debug'" in client.out
+    else:
+        assert "CMAKE_BUILD_TYPE: ''" in client.out
