@@ -1,9 +1,10 @@
+import textwrap
+
 import pytest
 
 from conans.model.recipe_ref import RecipeReference
 from conans.test.assets.genconanfile import GenConanfile
 from conans.test.utils.tools import TestClient
-from conans.util.files import save
 
 
 @pytest.mark.parametrize("require, pattern, alternative, pkg", [
@@ -116,3 +117,23 @@ def test_replace_requires_errors(pattern, replace):
     c.run("create pkg")
     c.run("install app -pr=profile", assert_error=True)
     assert f"ERROR: Error reading 'profile' profile. Error in [replace_xxx] '{pattern}: {replace}'"
+
+
+def test_shared_profile():
+    c = TestClient()
+    profile = textwrap.dedent("""
+        [replace_requires]
+        xz_utils/5.4.*: xz_utils/5.4.4
+        xz_utils/4.5.*: xz_utils/4.5.0
+        xz_utils/3.2.*: xz_utils/3.2.3
+    """)
+    c.save({"xz/conanfile.py": GenConanfile("xz_utils"),
+            "app/conanfile.py": GenConanfile().with_requires("pkg/0.2"),
+            "profile": profile})
+    for v in ("5.4.4", "4.5.0", "3.2.3"):
+        c.run(f"create xz --version={v}")
+
+    for v in ("5.4.1", "4.5.1", "3.2.0"):
+        c.save({"app/conanfile.py": GenConanfile().with_requires(f"xz_utils/{v}")})
+        c.run("install app -pr=profile")
+        print(c.out)
