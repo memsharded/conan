@@ -1,4 +1,5 @@
 import textwrap
+import json
 
 import pytest
 
@@ -137,3 +138,29 @@ def test_shared_profile():
         c.save({"app/conanfile.py": GenConanfile().with_requires(f"xz_utils/{v}")})
         c.run("install app -pr=profile")
         print(c.out)
+    assert "ERROR: Error reading 'profile' profile: Error in [replace_xxx]" in c.out
+
+
+def test_replace_requires_invalid_requires_errors():
+    """
+    replacing for something incorrect not existing is not an error per-se, it is valid that
+    a recipe requires("pkg/2.*"), and then it will fail because such package doesn't exist
+    """
+    c = TestClient()
+    c.save({"app/conanfile.py": GenConanfile().with_requires("pkg/0.2"),
+            "profile": f"[replace_requires]\npkg/0.2: pkg/2.*"})
+    c.run("install app -pr=profile", assert_error=True)
+    assert "pkg/0.2: pkg/2.*" in c.out  # The replacement happens
+    assert "ERROR: Package 'pkg/2.*' not resolved" in c.out
+
+
+def test_replace_requires_json_format():
+    c = TestClient()
+    c.save({"pkg/conanfile.py": GenConanfile("pkg", "0.2"),
+            "app/conanfile.py": GenConanfile().with_requires("pkg/0.1"),
+            "profile": f"[replace_requires]\npkg/0.1: pkg/0.2"})
+    c.run("create pkg")
+    c.run("install app -pr=profile --format=json")
+    assert "pkg/0.1: pkg/0.2" in c.out  # The replacement happens
+    graph = json.loads(c.stdout)
+    assert graph["graph"]["replaced_requires"] == {"pkg/0.1": "pkg/0.2"}
