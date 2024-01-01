@@ -3,6 +3,7 @@ import sys
 from conan.api.subapi.cache import CacheAPI
 from conan.api.subapi.local import LocalAPI
 from conan.api.subapi.lockfile import LockfileAPI
+from conan.internal.workspace import Workspace
 from conans import __version__ as client_version
 from conan.api.subapi.config import ConfigAPI
 from conan.api.subapi.download import DownloadAPI
@@ -32,7 +33,8 @@ class ConanAPI(object):
             raise ConanException("Conan needs Python >= 3.6")
 
         init_colorama(sys.stderr)
-        self.cache_folder = cache_folder or get_conan_user_home()
+        workspace = Workspace()
+        self.cache_folder = workspace.home_folder() or cache_folder or get_conan_user_home()
         self.home_folder = self.cache_folder  # Lets call it home, deprecate "cache"
 
         # Migration system
