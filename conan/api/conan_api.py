@@ -34,6 +34,7 @@ class ConanAPI(object):
 
         init_colorama(sys.stderr)
         workspace = Workspace()
+        self.workspace = workspace
         self.cache_folder = workspace.home_folder() or cache_folder or get_conan_user_home()
         self.home_folder = self.cache_folder  # Lets call it home, deprecate "cache"
 

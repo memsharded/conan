@@ -17,6 +17,7 @@ def _find_ws_file():
 class Workspace:
     def __init__(self):
         self._wsfile = _find_ws_file()
+        self.workspace_folder = os.path.dirname(self._wsfile) if self._wsfile else None
         if self._wsfile is not None:
             ws_module, _ = load_python_file(self._wsfile)
             self._ws_module = ws_module
@@ -31,6 +32,5 @@ class Workspace:
             return
         if os.path.isabs(home):
             return home
-        cwd = os.path.dirname(self._wsfile)
-        abs_path = os.path.normpath(os.path.join(cwd, home))
+        abs_path = os.path.normpath(os.path.join(self.workspace_folder, home))
         return abs_path
