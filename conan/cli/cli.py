@@ -50,7 +50,7 @@ class Cli:
         conan_custom_commands_path = HomePaths(self._conan_api.cache_folder).custom_commands_path
         # Important! This variable should be only used for testing/debugging purpose
         developer_custom_commands_path = os.getenv("_CONAN_INTERNAL_CUSTOM_COMMANDS_PATH")
-        custom_commands_folders = [developer_custom_commands_path, conan_custom_commands_path] \
+        custom_commands_folders = [conan_custom_commands_path, developer_custom_commands_path] \
             if developer_custom_commands_path else [conan_custom_commands_path]
 
         for custom_commands_path in custom_commands_folders:
