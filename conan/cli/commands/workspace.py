@@ -32,7 +32,7 @@ def workspace_open(conan_api: ConanAPI, parser, subparser, *args):
             continue
         git = Git(conanfile)
         git.clone(url=scm["url"], target=".")
-        git.checkout(commit=scm["commit"])
+        git.checkout(commit=scm["commit"], branch=scm["branch"])
 
 
 @conan_command(group="Consumer")
