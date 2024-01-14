@@ -16,6 +16,7 @@ from conans.model.conan_file import ConanFile
 from conans.model.options import Options
 from conans.model.recipe_ref import RecipeReference, ref_matches
 from conans.model.requires import Requirement
+from conans.model.version_range import VersionRange
 
 
 class DepsGraphBuilder(object):
@@ -251,8 +252,14 @@ class DepsGraphBuilder(object):
                 continue  # no match in name
             if pattern.version != "*":  # we need to check versions
                 rrange = require.version_range
-                valid = rrange.contains(pattern.version, self._resolve_prereleases) if rrange else \
-                    require.ref.version == pattern.version
+                pattern_version = str(pattern.version)
+                if pattern_version.startswith("[") and pattern_version.endswith("]"):
+                    pattern_range = VersionRange(pattern_version[1:-1])
+                    valid = pattern_range.intersection(rrange) if rrange \
+                        else pattern_range.contains(require.ref.version, self._resolve_prereleases)
+                else:
+                    valid = rrange.contains(pattern.version, self._resolve_prereleases) \
+                        if rrange else require.ref.version == pattern.version
                 if not valid:
                     continue
             if pattern.user != "*" and pattern.user != require.ref.user:
