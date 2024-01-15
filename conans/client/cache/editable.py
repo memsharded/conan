@@ -12,7 +12,8 @@ EDITABLE_PACKAGES_FILE = 'editable_packages.json'
 
 
 class EditablePackages:
-    def __init__(self, cache_folder):
+    def __init__(self, conan_api):
+        cache_folder = conan_api.home_folder
         self._edited_file = normpath(join(cache_folder, EDITABLE_PACKAGES_FILE))
         if os.path.exists(self._edited_file):
             edited = load(self._edited_file)
@@ -21,6 +22,9 @@ class EditablePackages:
                                  for r, d in edited_js.items()}
         else:
             self._edited_refs = {}  # {ref: {"path": path, "layout": layout}}
+        editables = conan_api.workspace.editables()
+        if editables:
+            self._edited_refs.update({RecipeReference.loads(r): v for r, v in editables.items()})
 
     @property
     def edited_refs(self):

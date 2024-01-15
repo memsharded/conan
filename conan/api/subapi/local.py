@@ -16,7 +16,7 @@ class LocalAPI:
 
     def __init__(self, conan_api):
         self._conan_api = conan_api
-        self.editable_packages = EditablePackages(conan_api.home_folder)
+        self.editable_packages = EditablePackages(conan_api)
 
     @staticmethod
     def get_conanfile_path(path, cwd, py):
@@ -58,7 +58,7 @@ class LocalAPI:
         self.editable_packages.add(ref, target_path, output_folder=output_folder)
         return ref
 
-    def workspace_add(self, path, ws, name=None, version=None, user=None, channel=None, cwd=None,
+    def workspace_add(self, path, name=None, version=None, user=None, channel=None, cwd=None,
                       output_folder=None, remotes=None):
         path = self._conan_api.local.get_conanfile_path(path, cwd, py=True)
         app = ConanApp(self._conan_api)
@@ -70,13 +70,16 @@ class LocalAPI:
         target_path = self._conan_api.local.get_conanfile_path(path=path, cwd=cwd, py=True)
         output_folder = make_abs_path(output_folder) if output_folder else None
         # Check the conanfile is there, and name/version matches
-        ws.add(ref, target_path, output_folder=output_folder)
+        self._conan_api.workspace.add(ref, target_path, output_folder=output_folder)
         return ref
 
     def editable_remove(self, path=None, requires=None, cwd=None):
         if path:
             path = self._conan_api.local.get_conanfile_path(path, cwd, py=True)
         return self.editable_packages.remove(path, requires)
+
+    def workspace_remove(self, path):
+        self._conan_api.workspace.remove(path)
 
     def editable_list(self):
         return self.editable_packages.edited_refs

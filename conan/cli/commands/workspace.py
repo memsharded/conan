@@ -2,6 +2,7 @@ import os
 
 from conan.api.conan_api import ConanAPI
 from conan.api.output import ConanOutput, cli_out_write
+from conan.cli import make_abs_path
 from conan.cli.args import add_reference_args
 from conan.cli.command import conan_command, conan_subcommand
 from conan.internal.conan_app import ConanApp
@@ -16,9 +17,9 @@ def workspace_root(conan_api: ConanAPI, parser, subparser, *args):
     Return the folder containing the conanws.py workspace file
     """
     ws = conan_api.workspace
-    if not ws.workspace_folder:
+    if not ws.folder:
         raise ConanException("No workspace defined, conanws.py file not found")
-    return ws.workspace_folder
+    return ws.folder
 
 
 @conan_subcommand()
@@ -71,10 +72,20 @@ def workspace_add(conan_api: ConanAPI, parser, subparser, *args):
     args = parser.parse_args(*args)
     remotes = conan_api.remotes.list(args.remote) if not args.no_remote else []
     cwd = os.getcwd()
-    ref = conan_api.local.workspace_add(args.path, conan_api.workspace,
+    ref = conan_api.local.workspace_add(args.path,
                                         args.name, args.version, args.user, args.channel,
                                         cwd, args.output_folder, remotes=remotes)
     ConanOutput().success("Reference '{}' added to workspace".format(ref))
+
+
+@conan_subcommand()
+def workspace_remove(conan_api: ConanAPI, parser, subparser, *args):
+    """
+    Remove packages to current workspace
+    """
+    subparser.add_argument('path', help='Path to the package folder in the user workspace')
+    args = parser.parse_args(*args)
+    conan_api.local.workspace_remove(make_abs_path(args.path))
 
 
 @conan_command(group="Consumer")
