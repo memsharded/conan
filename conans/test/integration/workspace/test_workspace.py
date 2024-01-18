@@ -1,6 +1,8 @@
 import os
 import textwrap
 
+import pytest
+
 from conans.test.assets.genconanfile import GenConanfile
 from conans.test.utils.scm import create_local_git_repo
 from conans.test.utils.test_files import temp_folder
@@ -106,3 +108,49 @@ def test_workspace_add_packages():
     c.run("editable list")
     assert "pkga/0.1" not in c.out
     assert "pkgb/0.1" not in c.out
+
+
+@pytest.mark.tool("cmake", "3.28")
+def test_meta_project_cmake():
+    c = TestClient()
+    c.save({"conanws.yml": ""})
+    with c.chdir("pkga"):
+        c.run("new cmake_lib -d name=pkga -d version=0.1")
+        c.run("workspace add .")
+    with c.chdir("pkgb"):
+        c.run("new cmake_lib -d name=pkgb -d version=0.1 -d requires=pkga/0.1")
+        c.run("workspace add .")
+    with c.chdir("app"):
+        c.run("new cmake_exe -d name=app -d version=0.1 -d requires=pkgb/0.1")
+        c.run("workspace add .")
+    c.run("install app")
+    meta_cmake = textwrap.dedent("""\
+        cmake_minimum_required(VERSION 3.24)
+        project(meta)
+
+        include(ExternalProject)
+        ExternalProject_Add(pkga SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}/pkga
+                                 CMAKE_ARGS "-DCMAKE_TOOLCHAIN_FILE=${CMAKE_CURRENT_LIST_DIR}/pkga/build/generators/conan_toolchain.cmake"
+                                 BINARY_DIR ${CMAKE_CURRENT_LIST_DIR}/pkga/build
+                                 INSTALL_COMMAND ""
+                                 )
+
+        ExternalProject_Add(pkgb SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}/pkgb
+                                 CMAKE_ARGS "-DCMAKE_TOOLCHAIN_FILE=${CMAKE_CURRENT_LIST_DIR}/pkgb/build/generators/conan_toolchain.cmake"
+                                 BINARY_DIR ${CMAKE_CURRENT_LIST_DIR}/pkgb/build
+                                 INSTALL_COMMAND ""
+                                 DEPENDS pkga)
+        ExternalProject_Add(app SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}/app
+                                CMAKE_ARGS "-DCMAKE_TOOLCHAIN_FILE=${CMAKE_CURRENT_LIST_DIR}/app/build/generators/conan_toolchain.cmake"
+                                BINARY_DIR ${CMAKE_CURRENT_LIST_DIR}/app/build
+                                INSTALL_COMMAND ""
+                                DEPENDS pkgb
+                                )
+        """)
+    c.save({"CMakeLists.txt": meta_cmake})
+    print(c.current_folder)
+    c.run_command("cmake . -B build")
+    print(c.out)
+    c.run_command("cmake --build build --config Release")
+    print(c.out)
+
