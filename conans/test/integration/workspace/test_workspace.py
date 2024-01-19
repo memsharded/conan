@@ -123,29 +123,24 @@ def test_meta_project_cmake():
     with c.chdir("app"):
         c.run("new cmake_exe -d name=app -d version=0.1 -d requires=pkgb/0.1")
         c.run("workspace add .")
-    c.run("install app")
+    c.run("install app --build=editable")
+
     meta_cmake = textwrap.dedent("""\
         cmake_minimum_required(VERSION 3.24)
         project(meta)
 
-        include(ExternalProject)
-        ExternalProject_Add(pkga SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}/pkga
-                                 CMAKE_ARGS "-DCMAKE_TOOLCHAIN_FILE=${CMAKE_CURRENT_LIST_DIR}/pkga/build/generators/conan_toolchain.cmake"
-                                 BINARY_DIR ${CMAKE_CURRENT_LIST_DIR}/pkga/build
-                                 INSTALL_COMMAND ""
-                                 )
+        function(add_subdir subdir)
+            set(_bin_dir ${CMAKE_CURRENT_LIST_DIR}/${subdir}/build)
+            set(CMAKE_PREFIX_PATH ${_bin_dir}/generators ${CMAKE_PREFIX_PATH})
+            message(STATUS "CURRENT PREFIX PATH ${CMAKE_PREFIX_PATH}")
+            add_subdirectory(${subdir} ${_bin_dir})
+        endfunction()
 
-        ExternalProject_Add(pkgb SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}/pkgb
-                                 CMAKE_ARGS "-DCMAKE_TOOLCHAIN_FILE=${CMAKE_CURRENT_LIST_DIR}/pkgb/build/generators/conan_toolchain.cmake"
-                                 BINARY_DIR ${CMAKE_CURRENT_LIST_DIR}/pkgb/build
-                                 INSTALL_COMMAND ""
-                                 DEPENDS pkga)
-        ExternalProject_Add(app SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}/app
-                                CMAKE_ARGS "-DCMAKE_TOOLCHAIN_FILE=${CMAKE_CURRENT_LIST_DIR}/app/build/generators/conan_toolchain.cmake"
-                                BINARY_DIR ${CMAKE_CURRENT_LIST_DIR}/app/build
-                                INSTALL_COMMAND ""
-                                DEPENDS pkgb
-                                )
+        add_subdir(pkga)
+        add_subdir(pkgb)
+        add_dependencies(pkgb pkga)
+        add_subdir(app)
+        add_dependencies(app pkgb)
         """)
     c.save({"CMakeLists.txt": meta_cmake})
     print(c.current_folder)
