@@ -129,18 +129,22 @@ def test_meta_project_cmake():
         cmake_minimum_required(VERSION 3.24)
         project(meta)
 
-        function(add_subdir subdir)
+        function(add_subdir subdir dependencies dir_targets)
             set(_bin_dir ${CMAKE_CURRENT_LIST_DIR}/${subdir}/build)
             set(CMAKE_PREFIX_PATH ${_bin_dir}/generators ${CMAKE_PREFIX_PATH})
-            message(STATUS "CURRENT PREFIX PATH ${CMAKE_PREFIX_PATH}")
             add_subdirectory(${subdir} ${_bin_dir})
+            get_property(_local_targets DIRECTORY ${subdir} PROPERTY BUILDSYSTEM_TARGETS)
+            if(dependencies)
+                foreach(_local_target ${_local_targets})
+                    add_dependencies(${_local_target} "${dependencies}")
+                endforeach()
+            endif()
+            set(${dir_targets} ${_local_targets} PARENT_SCOPE)
         endfunction()
 
-        add_subdir(pkga)
-        add_subdir(pkgb)
-        add_dependencies(pkgb pkga)
-        add_subdir(app)
-        add_dependencies(app pkgb)
+        add_subdir(pkga "" pkga_targets)
+        add_subdir(pkgb ${pkga_targets} pkgb_targets)
+        add_subdir(app ${pkgb_targets} app_targets)
         """)
     c.save({"CMakeLists.txt": meta_cmake})
     print(c.current_folder)
@@ -148,4 +152,20 @@ def test_meta_project_cmake():
     print(c.out)
     c.run_command("cmake --build build --config Release")
     print(c.out)
+
+    content = c.load("pkga/src/pkga.cpp")
+    content = content.replace("Hello World", "BYE!!!!!!! WORLD")
+    c.save({"pkga/src/pkga.cpp": content})
+    c.run_command("cmake --build build --config Release")
+    print(c.out)
+    c.run_command(r"app\build\Release\app.exe")
+    print(c.out)
+    assert "BYE!!!!!!! WORLD Release!" in c.out
+
+    # Second time it works
+    c.run_command("cmake --build build --config Release")
+    print(c.out)
+    c.run_command(r"app\build\Release\app.exe")
+    print(c.out)
+    assert "BYE!!!!!!! WORLD Release!" in c.out
 
