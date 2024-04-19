@@ -652,3 +652,36 @@ class TestBuildOrderReduce:
         # different order
         c.run(f"graph build-order-merge --file=bo3.json --file=bo2.json", assert_error=True)
         assert "ERROR: Cannot merge build-orders of configuration!=recipe" in c.out
+
+
+def test_graph_build_order_override_error():
+    """
+    libc -> libb -> liba -> zlib/1.2
+              |--------------/
+      |-----override------> zlib/1.3
+    """
+    c = TestClient()
+    c.save({"zlib/conanfile.py": GenConanfile("zlib"),
+            "liba/conanfile.py": GenConanfile("liba", "0.1").with_requires("zlib/1.2"),
+            "libb/conanfile.py": GenConanfile("libb", "0.1").with_requires("liba/0.1", "zlib/1.2"),
+            "libc/conanfile.py": GenConanfile("libc", "0.1").with_requirement("libb/0.1")
+                                                            .with_requirement("zlib/1.3",
+                                                                              override=True)
+            })
+    c.run("export zlib --version=1.2")
+    c.run("export zlib --version=1.3")
+    c.run("export liba")
+    c.run("export libb")
+    c.run("export libc")
+    c.run("graph info --requires=libc/0.1 --lockfile-out=output.lock")
+    print(c.load("output.lock"))
+
+    c.run("graph build-order --requires=libc/0.1 --lockfile=output.lock --order-by=configuration "
+          "--build=missing --format=json", redirect_stdout="build_order.json")
+    print(c.load("build_order.json"))
+    c.run("install --require=zlib/1.3 --build=zlib/1.3")
+    c.run("install --require=liba/0.1 --build=liba/0.1 "
+          "--lockfile-overrides=\"{'zlib/1.2': ['zlib/1.3']}\" --lockfile=output.lock")
+    c.run("install --require=libb/0.1 --build=libb/0.1 "
+          "--lockfile-overrides=\"{'zlib/1.2': ['zlib/1.3#ffd4bc45820ddb320ab224685b9ba3fb']}\" "
+          "--lockfile=output.lock")

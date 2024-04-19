@@ -147,6 +147,7 @@ def test_overrides_diamond(override, force):
     overrides = json_graph['graph']["overrides"]
     assert len(overrides) == 1
     assert overrides["pkga/0.1"] == ["pkga/0.3"]
+    kk
 
 
 @pytest.mark.parametrize("override, force", [(True, False), (False, True)])
