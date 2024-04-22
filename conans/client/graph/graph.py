@@ -1,5 +1,6 @@
 from collections import OrderedDict
 
+from conan.api.output import ConanOutput
 from conans.client.graph.graph_error import GraphError
 from conans.model.package_ref import PkgReference
 from conans.model.recipe_ref import RecipeReference
@@ -273,21 +274,27 @@ class Overrides:
     @staticmethod
     def create(nodes):
         overrides = {}
+        ConanOutput().info("---------------COMPUTING OVERRIDES")
         for n in nodes:
+            ConanOutput().info(f"  FOR NODE {n}")
             for r in n.conanfile.requires.values():
+                ConanOutput().info(f"    For REQUIRE {r.ref} overriden {r.overriden_ref}")
                 if r.override:
                     continue
-                if r.overriden_ref and not r.force:
+                if r.overriden_ref:
                     overrides.setdefault(r.overriden_ref, set()).add(r.override_ref)
+                    #forced_overrides.add(r.overriden_ref)
                 else:
                     overrides.setdefault(r.ref, set()).add(None)
 
+        ConanOutput().info(f"    OVERRIDES {overrides}")
         # reduce, eliminate those overrides definitions that only override to None, that is, not
         # really an override
         result = Overrides()
         for require, override_info in overrides.items():
             if len(override_info) != 1 or None not in override_info:
                 result._overrides[require] = override_info
+        ConanOutput().info(f"    FINAML OVERRIDES {result._overrides}")
         return result
 
     def get(self, require):

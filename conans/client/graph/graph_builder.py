@@ -2,6 +2,7 @@ import copy
 
 from collections import deque
 
+from conan.api.output import ConanOutput
 from conan.internal.cache.conan_reference_layout import BasicLayout
 from conans.client.conanfile.configure import run_configure_method
 from conans.client.graph.graph import DepsGraph, Node, CONTEXT_HOST, \
@@ -40,6 +41,28 @@ class DepsGraphBuilder(object):
         dep_graph = DepsGraph()
 
         self._prepare_node(root_node, profile_host, profile_build, Options())
+        # INject overrides instead of making later the lockfile to replace them
+        if graph_lock is not None and graph_lock._overrides:
+            conanfile = root_node.conanfile
+            ConanOutput().info("++++++++initializing root node with overrides")
+            for ref, overrides in graph_lock._overrides.items():
+                ConanOutput().info(f"  Overrides {ref}={overrides}")
+                if len(overrides) == 1:
+                    override_ref = next(iter(overrides))
+                    existing_req = conanfile.requires._requires.get(Requirement(override_ref))
+                    if existing_req is None:
+                        conanfile.requires(repr(override_ref), override=True)
+                    else:
+                        ConanOutput().info(f"  Existing! {existing_req.ref}")
+                        existing_req.overriden_ref = RecipeReference.loads(str(existing_req.ref))
+                        existing_req.ref = override_ref
+                        existing_req.override_ref = override_ref
+                        existing_req.force = True
+
+                        if not existing_req.override and not existing_req.force:
+                            existing_req.forced_override = True
+                        conanfile.requires._requires[existing_req] = existing_req
+
         self._initialize_requires(root_node, dep_graph, graph_lock, profile_build, profile_host)
         dep_graph.add_node(root_node)
 
@@ -81,6 +104,7 @@ class DepsGraphBuilder(object):
 
             prev_ref = prev_node.ref if prev_node else prev_require.ref
             if prev_require.force or prev_require.override:  # override
+                ConanOutput().info(f"******I am being overridden {require.ref} overriden by {prev_ref}")
                 require.overriden_ref = require.ref  # Store that the require has been overriden
                 require.override_ref = prev_ref
                 require.ref = prev_ref

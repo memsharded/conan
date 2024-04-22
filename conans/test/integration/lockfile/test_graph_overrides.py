@@ -119,7 +119,9 @@ def test_overrides_diamond(override, force):
     c.run("create pkgb")
     c.run("create pkgc")
     c.run("lock create pkgd")
+    print(c.out)
     lock = json.loads(c.load("pkgd/conan.lock"))
+    print(c.load("pkgd/conan.lock"))
     requires = "\n".join(lock["requires"])
     assert "pkga/0.3" in requires
     assert "pkga/0.2" not in requires
@@ -132,12 +134,14 @@ def test_overrides_diamond(override, force):
     assert "pkga/0.1" not in str(deps)
     # Redundant assert, but checking "overrides" summary
     overrides = json_graph['graph']["overrides"]
+    print(overrides)
     assert len(overrides) == 2
-    assert overrides['pkga/0.1'] == ['pkga/0.3']
+    assert overrides['pkga/0.1'] == ['pkga/0.3#e3afb975277bc245212d6e8de88f4f8f']
     assert overrides['pkga/0.2'] == ['pkga/0.3#e3afb975277bc245212d6e8de88f4f8f']
 
     # apply the lockfile to pkgb, should it lock to pkga/0.3
     c.run("graph info pkgb --lockfile=pkgd/conan.lock --format=json")
+    print(c.out)
     json_graph = json.loads(c.stdout)
     deps = json_graph["graph"]["nodes"]["0"]["dependencies"]
     assert "pkga/0.3" in str(deps)
@@ -147,7 +151,6 @@ def test_overrides_diamond(override, force):
     overrides = json_graph['graph']["overrides"]
     assert len(overrides) == 1
     assert overrides["pkga/0.1"] == ["pkga/0.3"]
-    kk
 
 
 @pytest.mark.parametrize("override, force", [(True, False), (False, True)])
@@ -268,6 +271,7 @@ def test_graph_different_overrides():
     c.run("create pkgb")
     c.run("lock create pkgc")
     lock = json.loads(c.load("pkgc/conan.lock"))
+    print(c.load("pkgc/conan.lock"))
     requires = "\n".join(lock["build_requires"])
     assert "toolc/0.3" in requires
     assert "toolc/0.2" in requires

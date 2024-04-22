@@ -274,12 +274,13 @@ class Lockfile(object):
             raise
 
     def _resolve_overrides(self, require):
+        return
         existing = self._overrides.get(require.ref)
         if existing is not None and len(existing) == 1:
             require.overriden_ref = require.ref  # Store that the require has been overriden
             ref = next(iter(existing))
             require.ref = ref
-            require.force = True  # So this can be used later forcefully and avoid conflicts
+            # require.force_lock = True  # So this can be used later forcefully and avoid conflicts
             require.override_ref = ref
 
     def resolve_prev(self, node):
