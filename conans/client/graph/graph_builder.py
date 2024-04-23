@@ -40,37 +40,38 @@ class DepsGraphBuilder(object):
         # print("Loading graph")
         dep_graph = DepsGraph()
 
+        out = ConanOutput("load-graph: ")
         self._prepare_node(root_node, profile_host, profile_build, Options())
         # INject overrides instead of making later the lockfile to replace them
         if graph_lock is not None and graph_lock._overrides:
             conanfile = root_node.conanfile
-            ConanOutput().info("++++++++initializing root node with overrides")
+            out.info("++++++++initializing root node with overrides")
             for ref, overrides in graph_lock._overrides.items():
-                ConanOutput().info(f"  Overrides {ref}={overrides}")
+                out.info(f"  Overrides {ref}={overrides}")
                 if len(overrides) == 1:
                     override_ref = next(iter(overrides))
-                    existing_req = conanfile.requires._requires.get(Requirement(override_ref))
+                    override_require = Requirement(override_ref, override=True)
+                    existing_req = conanfile.requires._requires.get(override_require)
                     if existing_req is None:
                         conanfile.requires(repr(override_ref), override=True)
                     else:
-                        ConanOutput().info(f"  Existing! {existing_req.ref}")
+                        out.info(f"  Existing! {existing_req.ref} override {override_ref}")
                         existing_req.overriden_ref = RecipeReference.loads(str(existing_req.ref))
                         existing_req.ref = override_ref
                         existing_req.override_ref = override_ref
                         existing_req.force = True
-
-                        if not existing_req.override and not existing_req.force:
-                            existing_req.forced_override = True
                         conanfile.requires._requires[existing_req] = existing_req
 
         self._initialize_requires(root_node, dep_graph, graph_lock, profile_build, profile_host)
         dep_graph.add_node(root_node)
 
+        out.info("\n\nstarting expansion of grpah")
         open_requires = deque((r, root_node) for r in root_node.conanfile.requires.values())
         try:
             while open_requires:
                 # Fetch the first waiting to be expanded (depth-first)
                 (require, node) = open_requires.popleft()
+                out.info(f"Expanding from node={node} -> require={require.ref} override {require.override_ref}")
                 if require.override:
                     continue
                 new_node = self._expand_require(require, node, dep_graph, profile_host,
@@ -95,20 +96,28 @@ class DepsGraphBuilder(object):
         # print("  Expanding require ", node, "->", require)
         previous = node.check_downstream_exists(require)
         prev_node = None
+        out = ConanOutput("expand_require")
         if previous is not None:
+            out.info(f"require {node}->{require.ref} is closing a diamond")
             prev_require, prev_node, base_previous = previous
             # print("  Existing previous requirements from ", base_previous, "=>", prev_require)
+            out.info(f"Current require {id(require)}=>{require.serialize()}")
+            out.info(f"Previous require {id(prev_require)}=>{prev_require.serialize()}")
 
             if prev_require is None:
                 raise GraphLoopError(node, require, prev_node)
 
             prev_ref = prev_node.ref if prev_node else prev_require.ref
             if prev_require.force or prev_require.override:  # override
-                ConanOutput().info(f"******I am being overridden {require.ref} overriden by {prev_ref}")
-                require.overriden_ref = require.ref  # Store that the require has been overriden
+                out.info(f"*****{require.ref} overriden by {prev_ref}. Prev-rquire={prev_require.ref}")
+                out.info(f"{require.ref} being overriden to {repr(prev_require.ref)}")
+                require.overriden_ref = require.overriden_ref or require.ref  # Store that the require has been overriden
+                # require.override_ref = prev_require.ref
+                # require.ref = prev_require.ref
                 require.override_ref = prev_ref
                 require.ref = prev_ref
             else:
+                out.info("Not override, checking conflcts")
                 self._conflicting_version(require, node, prev_require, prev_node,
                                           prev_ref, base_previous, self._resolve_prereleases)
 

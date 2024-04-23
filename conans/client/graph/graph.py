@@ -278,12 +278,14 @@ class Overrides:
         for n in nodes:
             ConanOutput().info(f"  FOR NODE {n}")
             for r in n.conanfile.requires.values():
-                ConanOutput().info(f"    For REQUIRE {r.ref} overriden {r.overriden_ref}")
+                ConanOutput().info(f"    For REQUIRE {r.ref} overriden {r.overriden_ref} override {r.override_ref}")
                 if r.override:
                     continue
                 if r.overriden_ref:
-                    overrides.setdefault(r.overriden_ref, set()).add(r.override_ref)
-                    #forced_overrides.add(r.overriden_ref)
+                    if str(r.overriden_ref) != str(r.override_ref):  # diff version
+                        overrides.setdefault(r.overriden_ref, set()).add(r.override_ref)
+                    elif r.overriden_ref.revision and r.overriden_ref.revision != r.override_ref.revision:
+                        overrides.setdefault(r.overriden_ref, set()).add(r.override_ref)
                 else:
                     overrides.setdefault(r.ref, set()).add(None)
 
