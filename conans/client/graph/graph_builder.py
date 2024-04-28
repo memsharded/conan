@@ -111,11 +111,10 @@ class DepsGraphBuilder(object):
             if prev_require.force or prev_require.override:  # override
                 out.info(f"*****{require.ref} overriden by {prev_ref}. Prev-rquire={prev_require.ref}")
                 out.info(f"{require.ref} being overriden to {repr(prev_require.ref)}")
-                require.overriden_ref = require.overriden_ref or require.ref  # Store that the require has been overriden
-                # require.override_ref = prev_require.ref
-                # require.ref = prev_require.ref
-                require.override_ref = prev_ref
-                require.ref = prev_ref
+                require.overriden_ref = require.ref  # Old, overriden one
+                require.override_ref = prev_require.override_ref or prev_require.ref  # New one
+                require.override_require = prev_require
+                require.ref = prev_ref  # New one, maybe resolved with revision
             else:
                 out.info("Not override, checking conflcts")
                 self._conflicting_version(require, node, prev_require, prev_node,

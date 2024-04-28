@@ -31,6 +31,7 @@ class Requirement:
         # Meta and auxiliary information
         self.overriden_ref = None  # to store if the requirement has been overriden (store old ref)
         self.override_ref = None  # to store if the requirement has been overriden (store new ref)
+        self.override_require = None  # The object that overrides me
         self.is_test = test  # to store that it was a test, even if used as regular requires too
         self.skip = False
 

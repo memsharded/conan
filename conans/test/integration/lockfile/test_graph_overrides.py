@@ -24,6 +24,11 @@ def test_overrides_half_diamond(override, force):
     c.run("create pkga --version=0.2")
     c.run("create pkgb")
     c.run("lock create pkgc")
+    print(c.out)
+    print(c.load("pkgc/conan.lock"))
+
+    c.run("graph build-order pkgc -f=json")
+    print(c.out)
     lock = json.loads(c.load("pkgc/conan.lock"))
     requires = "\n".join(lock["requires"])
     assert "pkga/0.2" in requires
