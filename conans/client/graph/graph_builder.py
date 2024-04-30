@@ -101,11 +101,12 @@ class DepsGraphBuilder(object):
             out.info(f"require {node}->{require.ref} is closing a diamond")
             prev_require, prev_node, base_previous = previous
             # print("  Existing previous requirements from ", base_previous, "=>", prev_require)
-            out.info(f"Current require {id(require)}=>{require.serialize()}")
-            out.info(f"Previous require {id(prev_require)}=>{prev_require.serialize()}")
 
             if prev_require is None:
                 raise GraphLoopError(node, require, prev_node)
+
+            out.info(f"Current require {id(require)}=>{require.serialize()}")
+            out.info(f"Previous require {id(prev_require)}=>{prev_require.serialize()}")
 
             prev_ref = prev_node.ref if prev_node else prev_require.ref
             if prev_require.force or prev_require.override:  # override

@@ -100,7 +100,8 @@ class Node(object):
             require.aggregate(existing.require)
 
         # if the requirement has been overriden by the existing one, then no propagate override info
-        if require.override_require is not None and require.override_require is existing.require:
+        if existing is not None and require.override_require is not None \
+                and require.override_require is existing.require:
             # print(f"---+++++****** PROPAGATING override_require -----++++^^^^ {self}-{require}")
             require.override_require = require.overriden_ref = require.override_ref = None
 
