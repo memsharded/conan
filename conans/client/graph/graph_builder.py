@@ -49,10 +49,12 @@ class DepsGraphBuilder(object):
             for ref, overrides in graph_lock._overrides.items():
                 out.info(f"  Overrides {ref}={overrides}")
                 if len(overrides) == 1:
+                    out.info("Override lenght 1")
                     override_ref = next(iter(overrides))
                     override_require = Requirement(override_ref, override=True)
                     existing_req = conanfile.requires._requires.get(override_require)
                     if existing_req is None:
+                        out.info(f"{override_ref} is a new override")
                         conanfile.requires(repr(override_ref), override=True)
                     else:
                         out.info(f"  Existing! {existing_req.ref} override {override_ref}")

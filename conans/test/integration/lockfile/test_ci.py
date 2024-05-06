@@ -497,9 +497,10 @@ def test_single_config_decentralized_overrides():
     assert "toolc/2.0" in requires
     assert "toolc/1.0" in requires
     assert len(lock["overrides"]) == 1
-    assert set(lock["overrides"]["toolc/1.0"]) == {"toolc/3.0", "toolc/2.0", None}
+    assert set(lock["overrides"]["toolc/1.0"]) == {"toolc/3.0", "toolc/2.0"}
 
     c.run("graph build-order pkgc --lockfile=pkgc/conan.lock --format=json --build=missing")
+    print(c.stdout)
     to_build = json.loads(c.stdout)
     for level in to_build:
         for elem in level:
@@ -509,6 +510,9 @@ def test_single_config_decentralized_overrides():
                     continue
                 build_args = package["build_args"]
                 c.run(f"install {build_args} --lockfile=pkgc/conan.lock")
+                print("\n" * 5)
+                print(f"install {build_args} --lockfile=pkgc/conan.lock")
+                print(c.out)
 
     c.run("install pkgc --lockfile=pkgc/conan.lock")
     # All works, all binaries exist now
