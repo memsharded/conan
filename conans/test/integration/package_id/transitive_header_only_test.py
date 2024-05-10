@@ -150,7 +150,6 @@ class TransitiveIdsTest(unittest.TestCase):
                                                    .with_requirement("liba/2.0", force=True)})
         # USE THE NEW FIXED PACKAGE_ID
         client.run("create . --name=libd --version=1.0", assert_error=True)
-        print(client.out)
         client.assert_listed_binary({"liba/2.0": ("da39a3ee5e6b4b0d3255bfef95601890afd80709", "Cache"),
                                      "libb/1.0": ("da39a3ee5e6b4b0d3255bfef95601890afd80709", "Cache"),
                                      "libc/1.0": ("2d7000cf800f37e01880897faf74a366a21bebdc", "Missing"),

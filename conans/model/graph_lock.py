@@ -261,7 +261,6 @@ class Lockfile(object):
             locked_refs = self._conf_requires.refs()
         else:
             locked_refs = self._requires.refs()
-        self._resolve_overrides(require)
         try:
             self._resolve(require, locked_refs, resolve_prereleases)
         except ConanException:
@@ -272,16 +271,6 @@ class Lockfile(object):
                       f" overrides for correctly building this package with this lockfile"
                 ConanOutput().error(msg, error_type="exception")
             raise
-
-    def _resolve_overrides(self, require):
-        return
-        existing = self._overrides.get(require.ref)
-        if existing is not None and len(existing) == 1:
-            require.overriden_ref = require.ref  # Store that the require has been overriden
-            ref = next(iter(existing))
-            require.ref = ref
-            # require.force_lock = True  # So this can be used later forcefully and avoid conflicts
-            require.override_ref = ref
 
     def resolve_prev(self, node):
         if node.context == CONTEXT_BUILD:
