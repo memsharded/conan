@@ -1,6 +1,5 @@
 from collections import OrderedDict
 
-from conan.api.output import ConanOutput
 from conans.client.graph.graph_error import GraphError
 from conans.model.package_ref import PkgReference
 from conans.model.recipe_ref import RecipeReference
@@ -99,12 +98,6 @@ class Node(object):
                 return True
             require.aggregate(existing.require)
 
-        # if the requirement has been overriden by the existing one, then no propagate override info
-        if existing is not None and require.override_require is not None \
-                and require.override_require is existing.require:
-            # print(f"---+++++****** PROPAGATING override_require -----++++^^^^ {self}-{require}")
-            require.override_require = require.overriden_ref = require.override_ref = None
-
         assert not require.version_range  # No ranges slip into transitive_deps definitions
         # TODO: Might need to move to an update() for performance
         self.transitive_deps.pop(require, None)
@@ -125,10 +118,6 @@ class Node(object):
         if down_require is None:
             return
 
-        # TODO: Cleaner struct propagation
-        down_require.override_require = require.override_require
-        down_require.overriden_ref = require.overriden_ref
-        down_require.override_ref = require.override_ref
         return d.src.propagate_downstream(down_require, node)
 
     def check_downstream_exists(self, require):
@@ -247,7 +236,21 @@ class Node(object):
         return result
 
     def overrides(self):
-        return Overrides.create([self])
+
+        def transitive_subgraph():
+            result = set()
+            opened = {self}
+            while opened:
+                new_opened = set()
+                for o in opened:
+                    result.add(o)
+                    new_opened.update(set(o.neighbors()).difference(result))
+                opened = new_opened
+
+            return result
+
+        nodes = transitive_subgraph()
+        return Overrides.create(nodes)
 
 
 class Edge(object):
@@ -270,21 +273,21 @@ class Overrides:
     @staticmethod
     def create(nodes):
         overrides = {}
-        ConanOutput().info("---------------COMPUTING OVERRIDES")
-        for node in nodes:
-            ConanOutput().info(f"  FOR NODE {node}")
-            for transitive in node.transitive_deps.values():
-                r = transitive.require
-                ConanOutput().info(f"    For REQUIRE {r.ref} overriden {r.overriden_ref} override {r.override_ref}")
-                if r.overriden_ref:
+        for n in nodes:
+            for r in n.conanfile.requires.values():
+                if r.override:
+                    continue
+                if r.overriden_ref and not r.force:
                     overrides.setdefault(r.overriden_ref, set()).add(r.override_ref)
+                else:
+                    overrides.setdefault(r.ref, set()).add(None)
 
-        ConanOutput().info(f"    OVERRIDES {overrides}")
         # reduce, eliminate those overrides definitions that only override to None, that is, not
         # really an override
         result = Overrides()
-        result._overrides = overrides
-        ConanOutput().info(f"    FINAML OVERRIDES {result._overrides}")
+        for require, override_info in overrides.items():
+            if len(override_info) != 1 or None not in override_info:
+                result._overrides[require] = override_info
         return result
 
     def get(self, require):

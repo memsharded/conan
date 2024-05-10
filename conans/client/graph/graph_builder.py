@@ -42,27 +42,6 @@ class DepsGraphBuilder(object):
 
         out = ConanOutput("load-graph: ")
         self._prepare_node(root_node, profile_host, profile_build, Options())
-        # INject overrides instead of making later the lockfile to replace them
-        if graph_lock is not None and graph_lock._overrides:
-            conanfile = root_node.conanfile
-            out.info("++++++++initializing root node with overrides")
-            for ref, overrides in graph_lock._overrides.items():
-                out.info(f"  Overrides {ref}={overrides}")
-                if len(overrides) == 1:
-                    out.info("Override lenght 1")
-                    override_ref = next(iter(overrides))
-                    override_require = Requirement(override_ref, override=True)
-                    existing_req = conanfile.requires._requires.get(override_require)
-                    if existing_req is None:
-                        out.info(f"{override_ref} is a new override")
-                        conanfile.requires(repr(override_ref), override=True)
-                    else:
-                        out.info(f"  Existing! {existing_req.ref} override {override_ref}")
-                        existing_req.overriden_ref = RecipeReference.loads(str(existing_req.ref))
-                        existing_req.ref = override_ref
-                        existing_req.override_ref = override_ref
-                        existing_req.force = True
-                        conanfile.requires._requires[existing_req] = existing_req
 
         self._initialize_requires(root_node, dep_graph, graph_lock, profile_build, profile_host)
         dep_graph.add_node(root_node)
@@ -107,16 +86,16 @@ class DepsGraphBuilder(object):
             if prev_require is None:
                 raise GraphLoopError(node, require, prev_node)
 
-            out.info(f"Current require {id(require)}=>{require.serialize()}")
-            out.info(f"Previous require {id(prev_require)}=>{prev_require.serialize()}")
+            #out.info(f"Current require {id(require)}=>{require.serialize()}")
+            #out.info(f"Previous require {id(prev_require)}=>{prev_require.serialize()}")
 
             prev_ref = prev_node.ref if prev_node else prev_require.ref
             if prev_require.force or prev_require.override:  # override
-                out.info(f"*****{require.ref} overriden by {prev_ref}. Prev-rquire={prev_require.ref}")
-                out.info(f"{require.ref} being overriden to {repr(prev_require.ref)}")
+                #out.info(f"*****{require.ref} overriden by {prev_ref}. Prev-rquire={prev_require.ref}")
+                #out.info(f"{require.ref} being overriden to {repr(prev_require.ref)}")
                 require.overriden_ref = require.ref  # Old, overriden one
                 require.override_ref = prev_require.override_ref or prev_require.ref  # New one
-                require.override_require = prev_require
+                #require.override_require = prev_require
                 require.ref = prev_ref  # New one, maybe resolved with revision
             else:
                 out.info("Not override, checking conflcts")
@@ -229,8 +208,23 @@ class DepsGraphBuilder(object):
                 # if partial, we might still need to resolve the alias
                 if not resolved:
                     self._resolve_alias(node, require, alias, graph)
+            self._inject_overrides(graph_lock, require)
             self._resolve_replace_requires(node, require, profile_build, profile_host, graph)
             node.transitive_deps[require] = TransitiveRequirement(require, node=None)
+
+    def _inject_overrides(self, lockfile, require):
+        # INject overrides instead of making later the lockfile to replace them
+        if lockfile is None or not lockfile._overrides:
+            return
+
+        out = ConanOutput()
+        overriden = lockfile._overrides.get(require.ref)
+        if overriden and len(overriden) == 1:
+            out.info("Override lenght 1")
+            override_ref = next(iter(overriden))
+            require.overriden_ref = require.ref  # Store that the require has been overriden
+            require.ref = override_ref
+            require.override_ref = override_ref
 
     def _resolve_alias(self, node, require, alias, graph):
         # First try cached
