@@ -81,8 +81,10 @@ class DepsGraphBuilder(object):
 
             prev_ref = prev_node.ref if prev_node else prev_require.ref
             if prev_require.force or prev_require.override:  # override
-                require.overriden_ref = require.overriden_ref or require.ref  # Old, overriden one
-                require.override_ref = prev_require.override_ref or prev_require.ref  # New one
+                require.overriden_ref = require.overriden_ref or require.ref.copy()  # Old one
+                # require.override_ref can be !=None if lockfile-overrides defined
+                require.override_ref = (require.override_ref or prev_require.override_ref
+                                        or prev_require.ref.copy())  # New one
                 require.ref = prev_ref  # New one, maybe resolved with revision
             else:
                 self._conflicting_version(require, node, prev_require, prev_node,
@@ -194,22 +196,10 @@ class DepsGraphBuilder(object):
                 # if partial, we might still need to resolve the alias
                 if not resolved:
                     self._resolve_alias(node, require, alias, graph)
-            self._inject_overrides(graph_lock, require)
+            if graph_lock:
+                graph_lock.resolve_overrides(require)
             self._resolve_replace_requires(node, require, profile_build, profile_host, graph)
             node.transitive_deps[require] = TransitiveRequirement(require, node=None)
-
-    @staticmethod
-    def _inject_overrides(lockfile, require):
-        # INject overrides instead of making later the lockfile to replace them
-        if lockfile is None or not lockfile._overrides:
-            return
-
-        overriden = lockfile._overrides.get(require.ref)
-        if overriden and len(overriden) == 1:
-            override_ref = next(iter(overriden))
-            require.overriden_ref = require.overriden_ref or RecipeReference.loads(repr(require.ref))  # Store that the require has been overriden
-            require.override_ref = override_ref
-            require.ref = override_ref
 
     def _resolve_alias(self, node, require, alias, graph):
         # First try cached

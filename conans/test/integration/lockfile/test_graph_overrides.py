@@ -119,23 +119,34 @@ def test_overrides_diamond(override, force):
     c.run("create pkga --version=0.3")
     c.run("create pkgb")
     c.run("create pkgc")
+
+    # First without lockfile
+    c.run("graph info pkgd --format=json")
+
+    def check_graph_json(cl):
+        jsongraph = json.loads(cl.stdout)
+        deps_ = jsongraph["graph"]["nodes"]["0"]["dependencies"]
+        assert "pkga/0.3" in str(deps_)
+        assert "pkga/0.2" not in str(deps_)
+        assert "pkga/0.1" not in str(deps_)
+        # Redundant assert, but checking "overrides" summary
+        overrides_ = jsongraph['graph']["overrides"]
+        assert len(overrides_) == 2
+        assert overrides_['pkga/0.1'] == ['pkga/0.3']
+        assert overrides_['pkga/0.2'] == ['pkga/0.3']
+
+    check_graph_json(c)
+
     c.run("lock create pkgd")
     lock = json.loads(c.load("pkgd/conan.lock"))
     requires = "\n".join(lock["requires"])
     assert "pkga/0.3" in requires
     assert "pkga/0.2" not in requires
     assert "pkga/0.1" not in requires
+
+    # Now with lockfile, result should be ideally the same
     c.run("graph info pkgd --lockfile=pkgd/conan.lock --format=json")
-    json_graph = json.loads(c.stdout)
-    deps = json_graph["graph"]["nodes"]["0"]["dependencies"]
-    assert "pkga/0.3" in str(deps)
-    assert "pkga/0.2" not in str(deps)
-    assert "pkga/0.1" not in str(deps)
-    # Redundant assert, but checking "overrides" summary
-    overrides = json_graph['graph']["overrides"]
-    assert len(overrides) == 2
-    assert overrides['pkga/0.1'] == ['pkga/0.3']
-    assert overrides['pkga/0.2'] == ['pkga/0.3#e3afb975277bc245212d6e8de88f4f8f']
+    check_graph_json(c)
 
     # apply the lockfile to pkgb, should it lock to pkga/0.3
     c.run("graph info pkgb --lockfile=pkgd/conan.lock --format=json")

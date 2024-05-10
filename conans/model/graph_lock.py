@@ -272,6 +272,17 @@ class Lockfile(object):
                 ConanOutput().error(msg, error_type="exception")
             raise
 
+    def resolve_overrides(self, require):
+        if not self._overrides:
+            return
+
+        overriden = self._overrides.get(require.ref)
+        if overriden and len(overriden) == 1:
+            override_ref = next(iter(overriden))
+            require.overriden_ref = require.overriden_ref or require.ref.copy()
+            require.override_ref = override_ref
+            require.ref = override_ref
+
     def resolve_prev(self, node):
         if node.context == CONTEXT_BUILD:
             prevs = self._build_requires.get(node.ref)
