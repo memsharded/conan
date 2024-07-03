@@ -87,16 +87,7 @@ class CacheAPI:
 
         app = ConanApp(self.conan_api)
         if temp:
-            rmdir(app.cache.temp_folder)
-            # Clean those build folders that didn't succeed to create a package and wont be in DB
-            builds_folder = app.cache.builds_folder
-            if os.path.isdir(builds_folder):
-                for subdir in os.listdir(builds_folder):
-                    folder = os.path.join(builds_folder, subdir)
-                    manifest = os.path.join(folder, "p", "conanmanifest.txt")
-                    info = os.path.join(folder, "p", "conaninfo.txt")
-                    if not os.path.exists(manifest) or not os.path.exists(info):
-                        rmdir(folder)
+            app.cache.clean_temps()
         if backup_sources:
             backup_files = self.conan_api.cache.get_backup_sources(package_list, exclude=False, only_upload=False)
             for f in backup_files:

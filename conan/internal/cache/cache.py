@@ -21,42 +21,53 @@ class PkgCache:
 
     def __init__(self, cache_folder, global_conf):
         # paths
-        self._store_folder = global_conf.get("core.cache:storage_path") or \
-                             os.path.join(cache_folder, "p")
-
+        folder = global_conf.get("core.cache:storage_path") or os.path.join(cache_folder, "p")
+        long_folder = global_conf.get("core.cache:long_storage_path")
+        self._long_folder = os.path.abspath(long_folder) if long_folder else None
+        self._long_patterns = global_conf.get("core.cache:long_storage_packages", check_type=list)
+        if self._long_patterns and not self._long_folder:
+            raise ConanException("core.cache:long_storage_path must be defined if defined "
+                                 "core.cache:long_storage_packages")
         try:
-            mkdir(self._store_folder)
-            db_filename = os.path.join(self._store_folder, 'cache.sqlite3')
-            self._base_folder = os.path.abspath(self._store_folder)
+            mkdir(folder)
+            db_filename = os.path.join(folder, 'cache.sqlite3')
+            self._base_folder = os.path.abspath(folder)
             self._db = CacheDatabase(filename=db_filename)
         except Exception as e:
-            raise ConanException(f"Couldn't initialize storage in {self._store_folder}: {e}")
+            raise ConanException(f"Couldn't initialize storage in {folder}: {e}")
 
     @property
     def store(self):
         return self._base_folder
 
-    @property
-    def temp_folder(self):
-        """ temporary folder where Conan puts exports and packages before the final revision
-        is computed"""
-        # TODO: Improve the path definitions, this is very hardcoded
-        return os.path.join(self._base_folder, "t")
+    def _store_folder(self, ref):
+        if self._long_patterns and any(ref.matches(p) for p in self._long_patterns):
+            return self._long_folder
+        return self._base_folder
 
-    @property
-    def builds_folder(self):
-        return os.path.join(self._base_folder, "b")
+    def clean_temps(self):
+        temp_folder = os.path.join(self._base_folder, "t")
+        rmdir(temp_folder)
+        # Clean those build folders that didn't succeed to create a package and wont be in DB
+        builds_folder = os.path.join(self._base_folder, "b")
+        if os.path.isdir(builds_folder):
+            for subdir in os.listdir(builds_folder):
+                folder = os.path.join(builds_folder, subdir)
+                manifest = os.path.join(folder, "p", "conanmanifest.txt")
+                info = os.path.join(folder, "p", "conaninfo.txt")
+                if not os.path.exists(manifest) or not os.path.exists(info):
+                    rmdir(folder)
 
-    def _create_path(self, relative_path, remove_contents=True):
-        path = self._full_path(relative_path)
+    def _create_path(self, relative_path, ref, remove_contents=True):
+        path = self._full_path(relative_path, ref)
         if os.path.exists(path) and remove_contents:
             rmdir(path)
         os.makedirs(path, exist_ok=True)
 
-    def _full_path(self, relative_path):
+    def _full_path(self, relative_path, ref):
         # This one is used only for rmdir and mkdir operations, not returned to user
         # or stored in DB
-        path = os.path.realpath(os.path.join(self._base_folder, relative_path))
+        path = os.path.realpath(os.path.join(self._store_folder(ref), relative_path))
         return path
 
     @staticmethod
@@ -89,8 +100,8 @@ class PkgCache:
         assert ref.timestamp is None
         h = ref.name[:5] + PkgCache._short_hash_path(ref.repr_notime())
         reference_path = os.path.join("t", h)
-        self._create_path(reference_path)
-        return RecipeLayout(ref, os.path.join(self._base_folder, reference_path))
+        self._create_path(reference_path, ref)
+        return RecipeLayout(ref, os.path.join(self._store_folder(ref), reference_path))
 
     def create_build_pkg_layout(self, pref: PkgReference):
         # Temporary layout to build a new package, when we don't know the package revision yet
@@ -102,8 +113,8 @@ class PkgCache:
         random_id = str(uuid.uuid4())
         h = pref.ref.name[:5] + PkgCache._short_hash_path(pref.repr_notime() + random_id)
         package_path = os.path.join("b", h)
-        self._create_path(package_path)
-        return PackageLayout(pref, os.path.join(self._base_folder, package_path))
+        self._create_path(package_path, pref.ref)
+        return PackageLayout(pref, os.path.join(self._store_folder(pref.ref), package_path))
 
     def recipe_layout(self, ref: RecipeReference):
         """ the revision must exists, the folder must exist
@@ -114,7 +125,7 @@ class PkgCache:
             ref_data = self._db.get_recipe(ref)
         ref_path = ref_data.get("path")
         ref = ref_data.get("ref")  # new revision with timestamp
-        return RecipeLayout(ref, os.path.join(self._base_folder, ref_path))
+        return RecipeLayout(ref, os.path.join(self._store_folder(ref), ref_path))
 
     def get_latest_recipe_reference(self, ref: RecipeReference):
         assert ref.revision is None
@@ -135,7 +146,7 @@ class PkgCache:
         pref_data = self._db.try_get_package(pref)
         pref_path = pref_data.get("path")
         # we use abspath to convert cache forward slash in Windows to backslash
-        return PackageLayout(pref, os.path.abspath(os.path.join(self._base_folder, pref_path)))
+        return PackageLayout(pref, os.path.abspath(os.path.join(self._store_folder(pref.ref), pref_path)))
 
     def create_ref_layout(self, ref: RecipeReference):
         """ called exclusively by:
@@ -145,8 +156,8 @@ class PkgCache:
         assert ref.revision, "Recipe revision must be known to create the package layout"
         reference_path = self._get_path(ref)
         self._db.create_recipe(reference_path, ref)
-        self._create_path(reference_path, remove_contents=False)
-        return RecipeLayout(ref, os.path.join(self._base_folder, reference_path))
+        self._create_path(reference_path, ref, remove_contents=False)
+        return RecipeLayout(ref, os.path.join(self._store_folder(ref), reference_path))
 
     def create_pkg_layout(self, pref: PkgReference):
         """ called by:
@@ -158,8 +169,8 @@ class PkgCache:
         assert pref.revision, "Package revision should be known to create the package layout"
         package_path = self._get_path_pref(pref)
         self._db.create_package(package_path, pref, None)
-        self._create_path(package_path, remove_contents=False)
-        return PackageLayout(pref, os.path.join(self._base_folder, package_path))
+        self._create_path(package_path, pref.ref, remove_contents=False)
+        return PackageLayout(pref, os.path.join(self._store_folder(pref.ref), package_path))
 
     def update_recipe_timestamp(self, ref: RecipeReference):
         """ when the recipe already exists in cache, but we get a new timestamp from a server
@@ -207,7 +218,7 @@ class PkgCache:
         build_id = layout.build_id
         pref.timestamp = revision_timestamp_now()
         # Wait until it finish to really update the DB
-        relpath = os.path.relpath(layout.base_folder, self._base_folder)
+        relpath = os.path.relpath(layout.base_folder, self._store_folder(pref.ref))
         relpath = relpath.replace("\\", "/")  # Uniform for Windows and Linux
         try:
             self._db.create_package(relpath, pref, build_id)
@@ -222,7 +233,7 @@ class PkgCache:
             layout._base_folder = pkg_layout.base_folder  # reuse existing one
             # TODO: The relpath would be the same as the previous one, it shouldn't be ncessary to
             #  update it, the update_package_timestamp() can be simplified and path dropped
-            relpath = os.path.relpath(layout.base_folder, self._base_folder)
+            relpath = os.path.relpath(layout.base_folder, self._store_folder(pref.ref))
             self._db.update_package_timestamp(pref, path=relpath, build_id=build_id)
 
     def assign_rrev(self, layout: RecipeLayout):
@@ -238,17 +249,17 @@ class PkgCache:
         # with the hash created based on the recipe revision
         new_path_relative = self._get_path(ref)
 
-        new_path_absolute = self._full_path(new_path_relative)
+        new_path_absolute = self._full_path(new_path_relative, ref)
 
         if os.path.exists(new_path_absolute):
             # If there source folder exists, export and export_sources
             # folders are already copied so we can remove the tmp ones
-            rmdir(self._full_path(layout.base_folder))
+            rmdir(self._full_path(layout.base_folder, ref))
         else:
             # Destination folder is empty, move all the tmp contents
-            renamedir(self._full_path(layout.base_folder), new_path_absolute)
+            renamedir(self._full_path(layout.base_folder, ref), new_path_absolute)
 
-        layout._base_folder = os.path.join(self._base_folder, new_path_relative)
+        layout._base_folder = os.path.join(self._store_folder(ref), new_path_relative)
 
         # Wait until it finish to really update the DB
         try:
