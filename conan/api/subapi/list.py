@@ -1,14 +1,18 @@
+import os
+from collections import OrderedDict
 from typing import Dict
 
 from conan.api.model import PackagesList
 from conan.api.output import ConanOutput, TimedOutput
+from conan.internal.api.list.query_parse import filter_package_configs
 from conan.internal.conan_app import ConanApp
+from conan.internal.paths import CONANINFO
 from conans.errors import ConanException, NotFoundException
 from conans.model.info import load_binary_info
 from conans.model.package_ref import PkgReference
-from conans.model.recipe_ref import RecipeReference
-from conans.search.search import get_cache_packages_binary_info, filter_packages
+from conans.model.recipe_ref import RecipeReference, ref_matches
 from conans.util.dates import timelimit
+from conans.util.files import load
 
 
 class ListAPI:
@@ -69,7 +73,7 @@ class ListAPI:
         if not remote:
             app = ConanApp(self.conan_api)
             prefs = app.cache.get_package_references(ref)
-            packages = get_cache_packages_binary_info(app.cache, prefs)
+            packages = _get_cache_packages_binary_info(app.cache, prefs)
         else:
             app = ConanApp(self.conan_api)
             if ref.revision == "latest":
@@ -85,9 +89,50 @@ class ListAPI:
         :param query: str like "os=Windows AND (arch=x86 OR compiler=gcc)"
         :return: Dict[PkgReference, PkgConfiguration]
         """
-        return filter_packages(query, pkg_configurations)
+        if query is None:
+            return pkg_configurations
+        try:
+            if "!" in query:
+                raise ConanException("'!' character is not allowed")
+            if "~" in query:
+                raise ConanException("'~' character is not allowed")
+            if " not " in query or query.startswith("not "):
+                raise ConanException("'not' operator is not allowed")
+            return filter_package_configs(pkg_configurations, query)
+        except Exception as exc:
+            raise ConanException("Invalid package query: %s. %s" % (query, exc))
 
-    def select(self, pattern, package_query=None, remote=None, lru=None):
+    @staticmethod
+    def filter_packages_profile(packages, profile, ref):
+        result = {}
+        profile_settings = profile.processed_settings.serialize()
+        # Options are those for dependencies, like *:shared=True
+        profile_options = profile.options._deps_package_options
+        for pref, data in packages.items():
+            settings = data.get("settings", {})
+            settings_match = options_match = True
+            for k, v in settings.items():  # Only the defined settings that don't match
+                value = profile_settings.get(k)
+                if value is not None and value != v:
+                    settings_match = False
+                    break
+            options = data.get("options", {})
+            for k, v in options.items():
+                for pattern, pattern_options in profile_options.items():
+                    # Accept &: as referring to the current package being listed,
+                    # even if it's not technically a "consumer"
+                    if ref_matches(ref, pattern, True):
+                        value = pattern_options.get_safe(k)
+                        if value is not None and value != v:
+                            options_match = False
+                            break
+
+            if settings_match and options_match:
+                result[pref] = data
+
+        return result
+
+    def select(self, pattern, package_query=None, remote=None, lru=None, profile=None):
         if package_query and pattern.package_id and "*" not in pattern.package_id:
             raise ConanException("Cannot specify '-p' package queries, "
                                  "if 'package_id' is not a pattern")
@@ -150,6 +195,8 @@ class ListAPI:
                     packages = self.packages_configurations(rrev, remote)
                     if package_query is not None:
                         packages = self.filter_packages_configurations(packages, package_query)
+                    if profile is not None:
+                        packages = self.filter_packages_profile(packages, profile, rrev)
                     prefs = packages.keys()
                     prefs = pattern.filter_prefs(prefs)
                     packages = {pref: conf for pref, conf in packages.items() if pref in prefs}
@@ -193,7 +240,6 @@ class ListAPI:
                 ConanOutput().info(f"Finding binaries in remote {remote.name}")
                 pkg_configurations = self.packages_configurations(ref, remote=remote)
             except Exception as e:
-                pass
                 ConanOutput(f"ERROR IN REMOTE {remote.name}: {e}")
             else:
                 candidates.extend(_BinaryDistance(pref, data, conaninfo, remote)
@@ -202,8 +248,7 @@ class ListAPI:
         candidates.sort()
         pkglist = PackagesList()
         pkglist.add_refs([ref])
-        # If there are exact matches, only return the matches
-        # else, limit to the number specified
+        # Return the closest matches, stop adding when distance is increased
         candidate_distance = None
         for candidate in candidates:
             if candidate_distance and candidate.distance != candidate_distance:
@@ -331,3 +376,29 @@ class _BinaryDistance:
                 "python_requires": self.python_requires_diff,
                 "confs": self.confs_diff,
                 "explanation": self.explanation()}
+
+
+def _get_cache_packages_binary_info(cache, prefs) -> Dict[PkgReference, dict]:
+    """
+    param package_layout: Layout for the given reference
+    """
+
+    result = OrderedDict()
+
+    for pref in prefs:
+        latest_prev = cache.get_latest_package_reference(pref)
+        pkg_layout = cache.pkg_layout(latest_prev)
+
+        # Read conaninfo
+        info_path = os.path.join(pkg_layout.package(), CONANINFO)
+        if not os.path.exists(info_path):
+            raise ConanException(f"Corrupted package '{pkg_layout.reference}' "
+                                 f"without conaninfo.txt in: {info_path}")
+        conan_info_content = load(info_path)
+        info = load_binary_info(conan_info_content)
+        pref = pkg_layout.reference
+        # The key shoudln't have the latest package revision, we are asking for package configs
+        pref.revision = None
+        result[pkg_layout.reference] = info
+
+    return result

@@ -1,4 +1,5 @@
 import copy
+import numbers
 import re
 import os
 import fnmatch
@@ -38,6 +39,7 @@ BUILT_IN_CONFS = {
     "core.package_id:default_embed_mode": "By default, 'full_mode'",
     "core.package_id:default_python_mode": "By default, 'minor_mode'",
     "core.package_id:default_build_mode": "By default, 'None'",
+    "core.package_id:config_mode": "How the 'config_version' affects binaries. By default 'None'",
     # General HTTP(python-requests) configuration
     "core.net.http:max_retries": "Maximum number of connection retries (requests library)",
     "core.net.http:timeout": "Number of seconds without response to timeout (requests library)",
@@ -48,6 +50,8 @@ BUILT_IN_CONFS = {
     "core.net.http:clean_system_proxy": "If defined, the proxies system env-vars will be discarded",
     # Gzip compression
     "core.gzip:compresslevel": "The Gzip compression level for Conan artifacts (default=9)",
+    # Excluded from revision_mode = "scm" dirty and Git().is_dirty() checks
+    "core.scm:excluded": "List of excluded patterns for builtin git dirty checks",
     # Tools
     "tools.android:ndk_path": "Argument for the CMAKE_ANDROID_NDK",
     "tools.android:cmake_legacy_toolchain": "Define to explicitly pass ANDROID_USE_LEGACY_TOOLCHAIN_FILE in CMake toolchain",
@@ -55,8 +59,8 @@ BUILT_IN_CONFS = {
     "tools.build:download_source": "Force download of sources for every package",
     "tools.build:jobs": "Default compile jobs number -jX Ninja, Make, /MP VS (default: max CPUs)",
     "tools.build:sysroot": "Pass the --sysroot=<tools.build:sysroot> flag if available. (None by default)",
-    "tools.build.cross_building:can_run": "Bool value that indicates whether is possible to run a non-native "
-                                          "app on the same architecture. It's used by 'can_run' tool",
+    "tools.build.cross_building:can_run": "(boolean) Indicates whether is possible to run a non-native app on the same architecture. It's used by 'can_run' tool",
+    "tools.build.cross_building:cross_build": "(boolean) Decides whether cross-building or not regardless of arch/OS settings. Used by 'cross_building' tool",
     "tools.build:verbosity": "Verbosity of build systems if set. Possible values are 'quiet' and 'verbose'",
     "tools.compilation:verbosity": "Verbosity of compilation tools if set. Possible values are 'quiet' and 'verbose'",
     "tools.cmake.cmaketoolchain:generator": "User defined CMake generator to use instead of default",
@@ -67,24 +71,32 @@ BUILT_IN_CONFS = {
     "tools.cmake.cmaketoolchain:system_version": "Define CMAKE_SYSTEM_VERSION in CMakeToolchain",
     "tools.cmake.cmaketoolchain:system_processor": "Define CMAKE_SYSTEM_PROCESSOR in CMakeToolchain",
     "tools.cmake.cmaketoolchain:toolset_arch": "Toolset architecture to be used as part of CMAKE_GENERATOR_TOOLSET in CMakeToolchain",
+    "tools.cmake.cmaketoolchain:toolset_cuda": "(Experimental) Path to a CUDA toolset to use, or version if installed at the system level",
     "tools.cmake.cmaketoolchain:presets_environment": "String to define wether to add or not the environment section to the CMake presets. Empty by default, will generate the environment section in CMakePresets. Can take values: 'disabled'.",
+    "tools.cmake.cmaketoolchain:extra_variables": "Dictionary with variables to be injected in CMakeToolchain (potential override of CMakeToolchain defined variables)",
+    "tools.cmake.cmaketoolchain:enabled_blocks": "Select the specific blocks to use in the conan_toolchain.cmake",
     "tools.cmake.cmake_layout:build_folder_vars": "Settings and Options that will produce a different build folder and different CMake presets names",
+    "tools.cmake.cmake_layout:build_folder": "(Experimental) Allow configuring the base folder of the build for local builds",
+    "tools.cmake.cmake_layout:test_folder": "(Experimental) Allow configuring the base folder of the build for test_package",
     "tools.cmake:cmake_program": "Path to CMake executable",
     "tools.cmake:install_strip": "Add --strip to cmake.install()",
     "tools.deployer:symlinks": "Set to False to disable deployers copying symlinks",
     "tools.files.download:retry": "Number of retries in case of failure when downloading",
     "tools.files.download:retry_wait": "Seconds to wait between download attempts",
     "tools.files.download:verify": "If set, overrides recipes on whether to perform SSL verification for their downloaded files. Only recommended to be set while testing",
+    "tools.graph:vendor": "(Experimental) If 'build', enables the computation of dependencies of vendoring packages to build them",
     "tools.graph:skip_binaries": "Allow the graph to skip binaries not needed in the current configuration (True by default)",
     "tools.gnu:make_program": "Indicate path to make program",
     "tools.gnu:define_libcxx11_abi": "Force definition of GLIBCXX_USE_CXX11_ABI=1 for libstdc++11",
     "tools.gnu:pkg_config": "Path to pkg-config executable used by PkgConfig build helper",
+    "tools.gnu:build_triplet": "Custom build triplet to pass to Autotools scripts",
     "tools.gnu:host_triplet": "Custom host triplet to pass to Autotools scripts",
     "tools.google.bazel:configs": "List of Bazel configurations to be used as 'bazel build --config=config1 ...'",
     "tools.google.bazel:bazelrc_path": "List of paths to bazelrc files to be used as 'bazel --bazelrc=rcpath1 ... build'",
     "tools.meson.mesontoolchain:backend": "Any Meson backend: ninja, vs, vs2010, vs2012, vs2013, vs2015, vs2017, vs2019, xcode",
     "tools.meson.mesontoolchain:extra_machine_files": "List of paths for any additional native/cross file references to be appended to the existing Conan ones",
     "tools.microsoft:winsdk_version": "Use this winsdk_version in vcvars",
+    "tools.microsoft:msvc_update": "Force the specific update irrespective of compiler.update (CMakeToolchain and VCVars)",
     "tools.microsoft.msbuild:vs_version": "Defines the IDE version (15, 16, 17) when using the msvc compiler. Necessary if compiler.version specifies a toolset that is not the IDE default",
     "tools.microsoft.msbuild:max_cpu_count": "Argument for the /m when running msvc to build parallel projects",
     "tools.microsoft.msbuild:installation_path": "VS install path, to avoid auto-detect via vswhere, like C:/Program Files (x86)/Microsoft Visual Studio/2019/Community. Use empty string to disable",
@@ -105,10 +117,10 @@ BUILT_IN_CONFS = {
     "tools.apple:enable_visibility": "(boolean) Enable/Disable Visibility Apple Clang flags",
     "tools.env.virtualenv:powershell": "If it is set to True it will generate powershell launchers if os=Windows",
     # Compilers/Flags configurations
-    "tools.build:compiler_executables": "Defines a Python dict-like with the compilers path to be used. Allowed keys {'c', 'cpp', 'cuda', 'objc', 'objcxx', 'rc', 'fortran', 'asm', 'hip', 'ispc'}",
+    "tools.build:compiler_executables": "Defines a Python dict-like with the compilers path to be used. Allowed keys {'c', 'cpp', 'cuda', 'objc', 'objcxx', 'rc', 'fortran', 'asm', 'hip', 'ispc', 'ld', 'ar'}",
     "tools.build:cxxflags": "List of extra CXX flags used by different toolchains like CMakeToolchain, AutotoolsToolchain and MesonToolchain",
     "tools.build:cflags": "List of extra C flags used by different toolchains like CMakeToolchain, AutotoolsToolchain and MesonToolchain",
-    "tools.build:defines": "List of extra definition flags used by different toolchains like CMakeToolchain and AutotoolsToolchain",
+    "tools.build:defines": "List of extra definition flags used by different toolchains like CMakeToolchain, AutotoolsToolchain and MesonToolchain",
     "tools.build:sharedlinkflags": "List of extra flags used by CMakeToolchain for CMAKE_SHARED_LINKER_FLAGS_INIT variable",
     "tools.build:exelinkflags": "List of extra flags used by CMakeToolchain for CMAKE_EXE_LINKER_FLAGS_INIT variable",
     "tools.build:linker_scripts": "List of linker script files to pass to the linker used by different toolchains like CMakeToolchain, AutotoolsToolchain, and MesonToolchain",
@@ -642,25 +654,25 @@ class ConfDefinition:
             if pattern is None:
                 result.update(conf.serialize())
             else:
-                for k, v in conf.serialize():
+                for k, v in conf.serialize().items():
                     result[f"{pattern}:{k}"] = v
         return result
 
     @staticmethod
-    def _get_evaluated_value(__v):
+    def _get_evaluated_value(_v):
         """
         Function to avoid eval() catching local variables
         """
         try:
-            # Isolated eval
-            parsed_value = eval(__v)
-            if isinstance(parsed_value, str):  # xxx:xxx = "my string"
-                # Let's respect the quotes introduced by any user
-                parsed_value = '"{}"'.format(parsed_value)
-        except:
-            # It means eval() failed because of a string without quotes
-            parsed_value = __v.strip()
-        return parsed_value
+            value = eval(_v)  # This destroys Windows path strings with backslash
+        except:  # It means eval() failed because of a string without quotes
+            value = _v.strip()
+        else:
+            if not isinstance(value, (numbers.Number, bool, dict, list, set, tuple)) \
+                    and value is not None:
+                # If it is quoted string we respect it as-is
+                value = _v.strip()
+        return value
 
     def loads(self, text, profile=False):
         self._pattern_confs = {}

@@ -15,7 +15,6 @@ import hashlib
 from uuid import getnode as get_mac
 
 from conan.api.output import ConanOutput
-from conans.client.cmd.user import update_localdb
 from conans.client.rest.remote_credentials import RemoteCredentials
 from conans.errors import AuthenticationException, ConanException, ForbiddenException
 
@@ -24,11 +23,11 @@ LOGIN_RETRIES = 3
 
 class ConanApiAuthManager(object):
 
-    def __init__(self, rest_client_factory, cache, global_conf):
+    def __init__(self, rest_client_factory, cache_folder, localdb, global_conf):
         self._rest_client_factory = rest_client_factory
-        self._localdb = cache.localdb
+        self._localdb = localdb
         self._global_conf = global_conf
-        self._cache_folder = cache.cache_folder
+        self._cache_folder = cache_folder
 
     def call_rest_api_method(self, remote, method_name, *args, **kwargs):
         """Handles AuthenticationException and request user to input a user and a password"""
@@ -120,6 +119,4 @@ class ConanApiAuthManager(object):
             raise ConanException("Password contains not allowed symbols")
 
         # Store result in DB
-        remote_name, prev_user, user = update_localdb(self._localdb, user, token, refresh_token,
-                                                      remote)
-        return remote_name, prev_user, user
+        self._localdb.store(user, token, refresh_token, remote.url)

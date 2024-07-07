@@ -8,22 +8,30 @@ from conans.client.subsystems import deduce_subsystem, subsystem_path
 from conans.errors import ConanException, conanfile_exception_formatter
 from conans.util.files import save, mkdir, chdir
 
-_generators = {"CMakeToolchain": "conan.tools.cmake", "CMakeDeps": "conan.tools.cmake",
+_generators = {"CMakeToolchain": "conan.tools.cmake",
+               "CMakeDeps": "conan.tools.cmake",
                "MesonToolchain": "conan.tools.meson",
-               "MSBuildDeps": "conan.tools.microsoft", "MSBuildToolchain": "conan.tools.microsoft",
-               "NMakeToolchain": "conan.tools.microsoft", "NMakeDeps": "conan.tools.microsoft",
+               "MSBuildDeps": "conan.tools.microsoft",
+               "MSBuildToolchain": "conan.tools.microsoft",
+               "NMakeToolchain": "conan.tools.microsoft",
+               "NMakeDeps": "conan.tools.microsoft",
                "VCVars": "conan.tools.microsoft",
                "QbsProfile": "conan.tools.qbs.qbsprofile",
                "VirtualRunEnv": "conan.tools.env.virtualrunenv",
                "VirtualBuildEnv": "conan.tools.env.virtualbuildenv",
-               "AutotoolsDeps": "conan.tools.gnu", "AutotoolsToolchain": "conan.tools.gnu",
+               "AutotoolsDeps": "conan.tools.gnu",
+               "AutotoolsToolchain": "conan.tools.gnu",
+               "GnuToolchain": "conan.tools.gnu",
                "PkgConfigDeps": "conan.tools.gnu",
-               "BazelDeps": "conan.tools.google", "BazelToolchain": "conan.tools.google",
+               "BazelDeps": "conan.tools.google",
+               "BazelToolchain": "conan.tools.google",
                "IntelCC": "conan.tools.intel",
-               "XcodeDeps": "conan.tools.apple", "XcodeToolchain": "conan.tools.apple",
+               "XcodeDeps": "conan.tools.apple",
+               "XcodeToolchain": "conan.tools.apple",
                "PremakeDeps": "conan.tools.premake",
                "MakeDeps": "conan.tools.gnu",
-               "SConsDeps": "conan.tools.scons"
+               "SConsDeps": "conan.tools.scons",
+               "QbsDeps": "conan.tools.qbs"
                }
 
 
@@ -79,7 +87,10 @@ def write_generators(conanfile, app):
     # generators check that they are not present in the generators field,
     # to avoid duplicates between the generators attribute and the generate() method
     # They would raise an exception here if we don't invalidate the field while we call them
-    old_generators = set(conanfile.generators)
+    old_generators = []
+    for gen in conanfile.generators:
+        if gen not in old_generators:
+            old_generators.append(gen)
     conanfile.generators = []
     try:
         for generator_name in old_generators:
@@ -95,7 +106,8 @@ def write_generators(conanfile, app):
                     continue
                 except Exception as e:
                     # When a generator fails, it is very useful to have the whole stacktrace
-                    conanfile.output.error(traceback.format_exc(), error_type="exception")
+                    if not isinstance(e, ConanException):
+                        conanfile.output.error(traceback.format_exc(), error_type="exception")
                     raise ConanException(f"Error in generator '{generator_name}': {str(e)}") from e
     finally:
         # restore the generators attribute, so it can raise
@@ -197,15 +209,30 @@ def _generate_aggregated_env(conanfile):
         conanfile.output.info(f"Generated aggregated env files: {generated}")
 
 
-def relativize_generated_file(content, conanfile, placeholder):
+def relativize_paths(conanfile, placeholder):
     abs_base_path = conanfile.folders._base_generators
     if not abs_base_path or not os.path.isabs(abs_base_path):
-        return content
+        return None, None
     abs_base_path = os.path.join(abs_base_path, "")  # For the trailing / to dissambiguate matches
     generators_folder = conanfile.generators_folder
-    rel_path = os.path.relpath(abs_base_path, generators_folder)
+    try:
+        rel_path = os.path.relpath(abs_base_path, generators_folder)
+    except ValueError:  # In case the unit in Windows is different, path cannot be made relative
+        return None, None
     new_path = placeholder if rel_path == "." else os.path.join(placeholder, rel_path)
     new_path = os.path.join(new_path, "")  # For the trailing / to dissambiguate matches
-    content = content.replace(abs_base_path, new_path)
-    content = content.replace(abs_base_path.replace("\\", "/"), new_path.replace("\\", "/"))
-    return content
+    return abs_base_path, new_path
+
+
+def relativize_path(path, conanfile, placeholder):
+    abs_base_path, new_path = relativize_paths(conanfile, placeholder)
+    if abs_base_path is None:
+        return path
+    if path.startswith(abs_base_path):
+        path = path.replace(abs_base_path, new_path, 1)
+    else:
+        abs_base_path = abs_base_path.replace("\\", "/")
+        new_path = new_path.replace("\\", "/")
+        if path.startswith(abs_base_path):
+            path = path.replace(abs_base_path, new_path, 1)
+    return path
