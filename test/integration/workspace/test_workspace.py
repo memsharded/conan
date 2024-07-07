@@ -11,20 +11,12 @@ from conans.util.files import save
 
 
 class TestHomeRoot:
-    def test_workspace_home(self):
+    @pytest.mark.parametrize("ext, content", [("py", "home_folder = 'myhome'"),
+                                              ("yml", "home_folder: myhome")])
+    def test_workspace_home(self, ext, content):
         folder = temp_folder()
         cwd = os.path.join(folder, "sub1", "sub2")
-        conanws = "home_folder = 'myhome'"
-        save(os.path.join(folder, "conanws.py"), conanws)
-        c = TestClient(current_folder=cwd)
-        c.run("config home")
-        assert os.path.join(folder, "myhome") in c.stdout
-
-    def test_workspace_home_py(self):
-        folder = temp_folder()
-        cwd = os.path.join(folder, "sub1", "sub2")
-        conanws = "home_folder: myhome"
-        save(os.path.join(folder, "conanws.yml"), conanws)
+        save(os.path.join(folder, f"conanws.{ext}"), content)
         c = TestClient(current_folder=cwd)
         c.run("config home")
         assert os.path.join(folder, "myhome") in c.stdout
@@ -149,7 +141,6 @@ def test_meta_project_cmake():
     c.save({"CMakeLists.txt": meta_cmake})
     print(c.current_folder)
     c.run_command("cmake . -B build")
-    print(c.out)
     c.run_command("cmake --build build --config Release")
     print(c.out)
 
@@ -166,5 +157,4 @@ def test_meta_project_cmake():
     c.run_command("cmake --build build --config Release")
     print(c.out)
     c.run_command(r"app\build\Release\app.exe")
-    print(c.out)
     assert "BYE!!!!!!! WORLD Release!" in c.out
