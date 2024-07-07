@@ -1,3 +1,4 @@
+import json
 import os
 
 from conan.api.conan_api import ConanAPI
@@ -86,6 +87,21 @@ def workspace_remove(conan_api: ConanAPI, parser, subparser, *args):
     subparser.add_argument('path', help='Path to the package folder in the user workspace')
     args = parser.parse_args(*args)
     conan_api.local.workspace_remove(make_abs_path(args.path))
+
+
+def print_json(data):
+    results = data["info"]
+    myjson = json.dumps(results, indent=4)
+    cli_out_write(myjson)
+
+
+@conan_subcommand(formatters={"text": cli_out_write, "json": print_json})
+def workspace_info(conan_api: ConanAPI, parser, subparser, *args):
+    """
+    Display info for current workspace
+    """
+    parser.parse_args(*args)
+    return {"info": conan_api.local.workspace_info()}
 
 
 @conan_command(group="Consumer")

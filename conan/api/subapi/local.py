@@ -83,6 +83,9 @@ class LocalAPI:
     def workspace_remove(self, path):
         self._conan_api.workspace.remove(path)
 
+    def workspace_info(self):
+        return self._conan_api.workspace.serialize()
+
     def editable_list(self):
         return self.editable_packages.edited_refs
 

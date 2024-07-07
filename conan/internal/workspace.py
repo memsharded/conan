@@ -12,7 +12,7 @@ def _find_ws_folder():
     path = Path(os.getcwd())
     while path.is_dir() and len(path.parts) > 1:  # finish at '/'
         if (path / "conanws.yml").is_file() or (path / "conanws.py").is_file():
-            return path
+            return str(path)
         else:
             path = path.parent
 
@@ -36,12 +36,17 @@ class Workspace:
                 setattr(self._py, "conanws_data", self._yml)
 
     @property
+    def name(self):
+        return self._attr("name") or os.path.basename(self._folder)
+
+    @property
     def folder(self):
         return self._folder
 
     def _attr(self, value):
         if self._py and getattr(self._py, value, None):
-            return self._py.home_folder() if callable(self._py.home_folder) else self._py.home_folder
+            attr = getattr(self._py, value)
+            return attr() if callable(attr) else attr
         if self._yml:
             return self._yml.get(value)
 
@@ -54,6 +59,10 @@ class Workspace:
         return os.path.normpath(os.path.join(self._folder, home))
 
     def add(self, ref, path, output_folder):
+        """
+        Add a new editable to the current workspace 'conanws.yml' file.
+        If existing, the 'conanws.py' must use this via 'conanws_data' attribute
+        """
         if not self._folder:
             raise ConanException("Workspace not defined, please create a "
                                  "'conanws.py' or 'conanws.yml' file")
@@ -82,4 +91,13 @@ class Workspace:
         if not self._folder:
             return
         editables = self._attr("editables")
+        if editables:
+            for v in editables.values():
+                v["workspace"] = {"name": self.name,
+                                  "folder": self._folder}
         return editables
+
+    def serialize(self):
+        return {"name": self.name,
+                "folder": self._folder,
+                "editables": self._attr("editables")}

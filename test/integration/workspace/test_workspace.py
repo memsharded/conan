@@ -21,6 +21,19 @@ class TestHomeRoot:
         c.run("config home")
         assert os.path.join(folder, "myhome") in c.stdout
 
+    def test_workspace_home_user_py(self):
+        folder = temp_folder()
+        cwd = os.path.join(folder, "sub1", "sub2")
+        conanwspy = textwrap.dedent("""
+            def home_folder():
+                return "new" + conanws_data["home_folder"]
+            """)
+        save(os.path.join(folder, f"conanws.py"), conanwspy)
+        save(os.path.join(folder, "conanws.yml"), "home_folder: myhome")
+        c = TestClient(current_folder=cwd)
+        c.run("config home")
+        assert os.path.join(folder, "newmyhome") in c.stdout
+
     def test_workspace_root(self):
         c = TestClient()
         # Just check the root command works
@@ -33,6 +46,31 @@ class TestHomeRoot:
         c.save({"conanws.yml": ""}, clean_first=True)
         c.run("workspace root")
         assert c.current_folder in c.stdout
+
+
+class TestAddRemove:
+
+    def test_add(self):
+        c = TestClient()
+        c.save({"conanws.py": "name='myws'",
+                "dep1/conanfile.py": GenConanfile("dep1", "0.1"),
+                "dep2/conanfile.py": GenConanfile("dep2", "0.1"),
+                "dep3/conanfile.py": GenConanfile("dep3", "0.1")})
+        c.run("workspace add dep1")
+        assert "Reference 'dep1/0.1' added to workspace" in c.out
+        c.run("editable list")
+        assert "Workspace: myws" in c.out
+        assert "dep1/0.1" in c.out
+        assert "dep2" not in c.out
+        c.run("workspace add dep2")
+        assert "Reference 'dep2/0.1' added to workspace" in c.out
+        c.run("editable list")
+        assert "dep1/0.1" in c.out
+        assert "dep2/0.1" in c.out
+
+        c.run("workspace info --format=json")
+        print(c.out)
+        print(c.current_folder)
 
 
 def test_workspace_open_packages():
