@@ -58,34 +58,36 @@ class Workspace:
             return home
         return os.path.normpath(os.path.join(self._folder, home))
 
+    def _check_ws(self):
+        if not self._folder:
+            raise ConanException("Workspace not defined, please create a "
+                                 "'conanws.py' or 'conanws.yml' file")
+
     def add(self, ref, path, output_folder):
         """
         Add a new editable to the current workspace 'conanws.yml' file.
         If existing, the 'conanws.py' must use this via 'conanws_data' attribute
         """
-        if not self._folder:
-            raise ConanException("Workspace not defined, please create a "
-                                 "'conanws.py' or 'conanws.yml' file")
+        self._check_ws()
         self._yml = self._yml or {}
         self._yml.setdefault("editables", {})[str(ref)] = {"path": path,
                                                            "output_folder": output_folder}
         save(self._yml_file, yaml.dump(self._yml))
 
     def remove(self, path):
-        # Maybe also means to remove the folder? Or is that a CLOSE operation?
-        if not self._folder:
-            raise ConanException("Workspace not defined, please create a "
-                                 "'conanws.py' or 'conanws.yml' file")
+        self._check_ws()
         self._yml = self._yml or {}
-        editables = {}
+        found_ref = None
+        path = path.replace("\\", "/")
         for ref, info in self._yml.get("editables", {}).items():
-            if not info["path"].startswith(path):  # Remove all that starts with the path
-                editables[ref] = info
-        if editables:
-            self._yml["editables"] = editables
-        else:
-            self._yml.pop("editables")
+            if os.path.dirname(info["path"]).replace("\\", "/") == path:
+                found_ref = ref
+                break
+        if not found_ref:
+            raise ConanException(f"No editable package to remove from this path: {path}")
+        self._yml["editables"].pop(found_ref)
         save(self._yml_file, yaml.dump(self._yml))
+        return found_ref
 
     def editables(self):
         if not self._folder:

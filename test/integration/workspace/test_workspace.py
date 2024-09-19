@@ -68,43 +68,90 @@ class TestAddRemove:
         assert "dep1/0.1" in c.out
         assert "dep2/0.1" in c.out
 
-        c.run("workspace info --format=json")
-        print(c.out)
-        print(c.current_folder)
+        with c.chdir(temp_folder()):  # If we move to another folder, outside WS, no editables
+            c.run("editable list")
+            assert "pkga/0.1" not in c.out
+            assert "pkgb/0.1" not in c.out
+
+        c.run("workspace info")
+        assert "dep1/0.1" in c.out
+        assert "dep2/0.1" in c.out
+
+        c.run("workspace remove dep1")
+        c.run("editable list")
+        assert "dep1/0.1" not in c.out
+        assert "dep2/0.1" in c.out
+
+        c.run("workspace remove dep2")
+        c.run("editable list")
+        assert "dep1/0.1" not in c.out
+        assert "dep2/0.1" not in c.out
 
 
-def test_workspace_open_packages():
-    folder = temp_folder()
-    conanfile = textwrap.dedent("""
-        from conan import ConanFile
-        from conan.tools.scm import Git
-        from conan.tools.files import update_conandata
+class TestOpenAdd:
+    def test_without_git(self):
+        t = TestClient(default_server_user=True)
+        t.save({"conanfile.py": GenConanfile("pkg", "0.1")})
+        t.run("create .")
+        t.run("upload * -r=default -c")
 
-        class Pkg(ConanFile):
-            name = "pkg"
-            version = "0.1"
+        c = TestClient(servers=t.servers)
+        c.run(f"workspace open pkg/0.1")
+        assert "name = 'pkg'" in c.load("pkg/conanfile.py")
 
-            def export(self):
-                git = Git(self, self.recipe_folder)
-                scm_url, scm_commit = git.get_url_and_commit()
-                branch = git.get_branch()
-                self.output.info(f"Branch {branch}")
-                update_conandata(self, {"scm": {"commit": scm_commit, "url": scm_url,
-                                                "branch": branch}})
-        """)
-    url, commit = create_local_git_repo(files={"conanfile.py": conanfile}, folder=folder,
-                                        branch="mybranch")
-    t1 = TestClient(default_server_user=True)
-    t1.run_command('git clone "{}" .'.format(url))
-    t1.run("create .")
-    t1.run("upload * -r=default -c")
+        # The add should work the same
+        c2 = TestClient(servers=t.servers)
+        c2.save({"conanws.py": ""})
+        c2.run(f"workspace add --ref=pkg/0.1")
+        assert "name = 'pkg'" in c2.load("pkg/conanfile.py")
+        c2.run("editable list")
+        assert "pkg/0.1" in c2.out
 
-    c = TestClient(servers=t1.servers)
-    c.run("workspace open --requires=pkg/0.1")
-    assert c.load("conanfile.py") == conanfile
+    def test_without_git_export_sources(self):
+        t = TestClient(default_server_user=True)
+        t.save({"conanfile.py": GenConanfile("pkg", "0.1").with_exports_sources("*.txt"),
+                "CMakeLists.txt": "mycmake"})
+        t.run("create .")
+        t.run("upload * -r=default -c")
+
+        c = TestClient(servers=t.servers)
+        c.run("workspace open pkg/0.1")
+        assert "name = 'pkg'" in c.load("pkg/conanfile.py")
+        assert "mycmake" in c.load("pkg/CMakeLists.txt")
+
+    def test_workspace_git_scm(self):
+        folder = temp_folder()
+        conanfile = textwrap.dedent("""
+            from conan import ConanFile
+            from conan.tools.scm import Git
+
+            class Pkg(ConanFile):
+                name = "pkg"
+                version = "0.1"
+                def export(self):
+                    git = Git(self)
+                    git.coordinates_to_conandata()
+            """)
+        url, commit = create_local_git_repo(files={"conanfile.py": conanfile}, folder=folder,
+                                            branch="mybranch")
+        t1 = TestClient(default_server_user=True)
+        t1.run_command('git clone "file://{}" .'.format(url))
+        t1.run("create .")
+        t1.run("upload * -r=default -c")
+
+        c = TestClient(servers=t1.servers)
+        c.run("workspace open pkg/0.1")
+        assert c.load("pkg/conanfile.py") == conanfile
+
+        c2 = TestClient(servers=t1.servers)
+        c2.save({"conanws.py": ""})
+        c2.run(f"workspace add --ref=pkg/0.1")
+        assert 'name = "pkg"' in c2.load("pkg/conanfile.py")
+        c2.run("editable list")
+        assert "pkg/0.1" in c2.out
 
 
-def test_workspace_add_packages():
+def test_workspace_build_editables():
     c = TestClient()
     c.save({"conanws.yml": ""})
 
@@ -121,23 +168,6 @@ def test_workspace_add_packages():
                                          "EditableBuild")})
     assert "pkga/0.1: WARN: BUILD PKGA!" in c.out
     assert "pkgb/0.1: WARN: BUILD PKGB!" in c.out
-    c.run("editable list")
-    assert "pkga/0.1" in c.out
-    assert "pkgb/0.1" in c.out
-    with c.chdir(temp_folder()):  # If we move to another folder, outside WS, no editables
-        c.run("editable list")
-        assert "pkga/0.1" not in c.out
-        assert "pkgb/0.1" not in c.out
-
-    c.run("workspace remove pkga")
-    c.run("editable list")
-    assert "pkga/0.1" not in c.out
-    assert "pkgb/0.1" in c.out
-
-    c.run("workspace remove pkgb")
-    c.run("editable list")
-    assert "pkga/0.1" not in c.out
-    assert "pkgb/0.1" not in c.out
 
 
 @pytest.mark.tool("cmake", "3.28")

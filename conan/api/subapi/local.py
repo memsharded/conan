@@ -16,7 +16,11 @@ class LocalAPI:
 
     def __init__(self, conan_api):
         self._conan_api = conan_api
-        self.editable_packages = EditablePackages(conan_api)
+        self.editable_packages = EditablePackages(conan_api.home_folder)
+        editables = conan_api.workspace.editables()
+        if editables:
+            self.editable_packages.edited_refs.update({RecipeReference.loads(r): v
+                                                       for r, v in editables.items()})
 
     @staticmethod
     def get_conanfile_path(path, cwd, py):
@@ -58,32 +62,11 @@ class LocalAPI:
         self.editable_packages.add(ref, target_path, output_folder=output_folder)
         return ref
 
-    def workspace_add(self, path, name=None, version=None, user=None, channel=None, cwd=None,
-                      output_folder=None, remotes=None):
-        path = self._conan_api.local.get_conanfile_path(path, cwd, py=True)
-        app = ConanApp(self._conan_api)
-        conanfile = app.loader.load_named(path, name, version, user, channel, remotes=remotes)
-        if conanfile.name is None or conanfile.version is None:
-            raise ConanException("Editable package recipe should declare its name and version")
-        ref = RecipeReference(conanfile.name, conanfile.version, conanfile.user, conanfile.channel)
-        # Retrieve conanfile.py from target_path
-        target_path = self._conan_api.local.get_conanfile_path(path=path, cwd=cwd, py=True)
-        output_folder = make_abs_path(output_folder) if output_folder else None
-        # Check the conanfile is there, and name/version matches
-        self._conan_api.workspace.add(ref, target_path, output_folder=output_folder)
-        return ref
-
     def editable_remove(self, path=None, requires=None, cwd=None):
         if path:
             path = make_abs_path(path, cwd)
             path = os.path.join(path, "conanfile.py")
         return self.editable_packages.remove(path, requires)
-
-    def workspace_remove(self, path):
-        self._conan_api.workspace.remove(path)
-
-    def workspace_info(self):
-        return self._conan_api.workspace.serialize()
 
     def editable_list(self):
         return self.editable_packages.edited_refs
