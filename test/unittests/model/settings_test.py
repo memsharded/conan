@@ -3,7 +3,7 @@ import unittest
 
 import pytest
 
-from conans.client.conf import default_settings_yml
+from conan.internal.default_settings import default_settings_yml
 from conans.errors import ConanException
 from conans.model.settings import Settings, bad_value_msg, undefined_field
 
@@ -481,3 +481,25 @@ def test_settings_intel_cppstd_03():
     settings.compiler = "intel-cc"
     # This doesn't crash, it used to crash due to "03" not quoted in setting.yml
     settings.compiler.cppstd = "03"
+
+
+def test_set_value_non_existing_values():
+    data = {
+        "compiler": {
+            "gcc": {
+                "version": ["4.8", "4.9"],
+                "arch": {"x86": {"speed": ["A", "B"]},
+                         "x64": {"speed": ["C", "D"]}}}
+        },
+        "os": ["Windows", "Linux"]
+    }
+    settings = Settings(data)
+    with pytest.raises(ConanException) as cm:
+        settings.update_values([("foo", "A")])
+    assert "'settings.foo' doesn't exist for 'settings'" in str(cm.value)
+    with pytest.raises(ConanException) as cm:
+        settings.update_values([("foo.bar", "A")])
+    assert "'settings.foo' doesn't exist for 'settings'" in str(cm.value)
+    # it does not raise any error
+    settings.update_values([("foo", "A")], raise_undefined=False)
+    settings.update_values([("foo.bar", "A")], raise_undefined=False)

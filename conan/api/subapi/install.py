@@ -1,8 +1,9 @@
 import os
 
+from conan.internal.api.install.generators import write_generators
 from conan.internal.conan_app import ConanApp
 from conan.internal.deploy import do_deploys
-from conans.client.generators import write_generators
+
 from conans.client.graph.install_graph import InstallGraph
 from conans.client.installer import BinaryInstaller
 from conans.errors import ConanInvalidConfiguration
@@ -63,8 +64,8 @@ class InstallAPI:
             msg = "{}: Invalid ID: {}: {}".format(conanfile, binary, reason)
             raise ConanInvalidConfiguration(msg)
 
-        if root_node.cant_build and root_node.should_build:
-            binary, reason = "Cannot build for this configuration", root_node.cant_build
+        if conanfile.info is not None and conanfile.info.cant_build and root_node.should_build:
+            binary, reason = "Cannot build for this configuration", conanfile.info.cant_build
             msg = "{}: {}: {}".format(conanfile, binary, reason)
             raise ConanInvalidConfiguration(msg)
 

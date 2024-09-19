@@ -1,6 +1,7 @@
 import fnmatch
 import json
 import os
+from json import JSONDecodeError
 
 from conans.client.graph.graph import RECIPE_EDITABLE, RECIPE_CONSUMER, RECIPE_PLATFORM, \
     RECIPE_VIRTUAL, BINARY_SKIP, BINARY_MISSING, BINARY_INVALID
@@ -55,7 +56,7 @@ class MultiPackagesList:
         try:
             return self.lists[name]
         except KeyError:
-            raise ConanException(f"'{name}' doesn't exist is package list")
+            raise ConanException(f"'{name}' doesn't exist in package list")
 
     def add(self, name, pkg_list):
         self.lists[name] = pkg_list
@@ -73,7 +74,12 @@ class MultiPackagesList:
 
     @staticmethod
     def load(file):
-        content = json.loads(load(file))
+        try:
+            content = json.loads(load(file))
+        except JSONDecodeError as e:
+            raise ConanException(f"Package list file invalid JSON: {file}\n{e}")
+        except Exception as e:
+            raise ConanException(f"Package list file missing or broken: {file}\n{e}")
         result = {}
         for remote, pkglist in content.items():
             if "error" in pkglist:
@@ -93,8 +99,13 @@ class MultiPackagesList:
     def load_graph(graphfile, graph_recipes=None, graph_binaries=None):
         if not os.path.isfile(graphfile):
             raise ConanException(f"Graph file not found: {graphfile}")
-        graph = json.loads(load(graphfile))
-        return MultiPackagesList._define_graph(graph, graph_recipes, graph_binaries)
+        try:
+            graph = json.loads(load(graphfile))
+            return MultiPackagesList._define_graph(graph, graph_recipes, graph_binaries)
+        except JSONDecodeError as e:
+            raise ConanException(f"Graph file invalid JSON: {graphfile}\n{e}")
+        except Exception as e:
+            raise ConanException(f"Graph file broken: {graphfile}\n{e}")
 
     @staticmethod
     def _define_graph(graph, graph_recipes=None, graph_binaries=None):
