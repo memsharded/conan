@@ -197,9 +197,9 @@ class ProfileLoader:
             raise ConanException("Error parsing the profile text file: %s" % str(exc))
 
     @staticmethod
-    def get_profile_path(profiles_path, profile_name, cwd, exists=True):
+    def get_profile_path(profiles_path, profile_name, cwd):
         def valid_path(_profile_path, _profile_name=None):
-            if exists and not os.path.isfile(_profile_path):
+            if not os.path.isfile(_profile_path):
                 raise ConanException("Profile not found: {}".format(_profile_name or _profile_path))
             return _profile_path
 
@@ -214,11 +214,10 @@ class ProfileLoader:
         if not os.path.exists(default_folder):
             mkdir(default_folder)
         profile_path = os.path.join(default_folder, profile_name)
-        if exists:
-            if not os.path.isfile(profile_path):
-                profile_path = os.path.abspath(os.path.join(cwd, profile_name))
-            if not os.path.isfile(profile_path):
-                raise ConanException("Profile not found: %s" % profile_name)
+        if not os.path.isfile(profile_path):  # If not in home, look in CWD
+            profile_path = os.path.abspath(os.path.join(cwd, profile_name))
+        if not os.path.isfile(profile_path):
+            raise ConanException("Profile not found: %s" % profile_name)
         return profile_path
 
 

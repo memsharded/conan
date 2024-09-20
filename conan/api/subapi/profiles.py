@@ -17,6 +17,9 @@ class ProfilesAPI:
         self._conan_api = conan_api
         self._home_paths = HomePaths(conan_api.cache_folder)
 
+    def default_folder(self):
+        return self._home_paths.profiles_path
+
     def get_default_host(self):
         """
         :return: the path to the default "host" profile, either in the cache or as defined
@@ -105,14 +108,14 @@ class ProfilesAPI:
                                   f"dependencies", warn_tag="legacy")
         return profile
 
-    def get_path(self, profile, cwd=None, exists=True):
+    def get_path(self, profile, cwd=None):
         """
         :return: the resolved path of the given profile name, that could be in the cache,
             or local, depending on the "cwd"
         """
         cwd = cwd or os.getcwd()
         profiles_folder = self._home_paths.profiles_path
-        profile_path = ProfileLoader.get_profile_path(profiles_folder, profile, cwd, exists=exists)
+        profile_path = ProfileLoader.get_profile_path(profiles_folder, profile, cwd)
         return profile_path
 
     def list(self):
