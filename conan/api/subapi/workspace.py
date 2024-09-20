@@ -23,6 +23,9 @@ class WorkspaceAPI:
     def folder(self):
         return self._workspace.folder
 
+    def config_folder(self):
+        return self._workspace.config_folder()
+
     def editables(self):
         return self._workspace.editables()
 

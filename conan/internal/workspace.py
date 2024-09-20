@@ -58,6 +58,12 @@ class Workspace:
             return home
         return os.path.normpath(os.path.join(self._folder, home))
 
+    def config_folder(self):
+        folder = self._attr("config_folder")
+        if folder is None or os.path.isabs(folder):
+            return folder
+        return os.path.normpath(os.path.join(self._folder, folder))
+
     def _check_ws(self):
         if not self._folder:
             raise ConanException("Workspace not defined, please create a "

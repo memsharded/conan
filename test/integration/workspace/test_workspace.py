@@ -150,24 +150,42 @@ class TestOpenAdd:
         c2.run("editable list")
         assert "pkg/0.1" in c2.out
 
+    def test_workspace_build_editables(self):
+        c = TestClient()
+        c.save({"conanws.yml": ""})
 
-def test_workspace_build_editables():
-    c = TestClient()
-    c.save({"conanws.yml": ""})
+        c.save({"pkga/conanfile.py": GenConanfile("pkga", "0.1").with_build_msg("BUILD PKGA!"),
+                "pkgb/conanfile.py": GenConanfile("pkgb", "0.1").with_build_msg("BUILD PKGB!")
+                                                                .with_requires("pkga/0.1")})
+        c.run("workspace add pkga")
+        c.run("workspace add pkgb")
 
-    c.save({"pkga/conanfile.py": GenConanfile("pkga", "0.1").with_build_msg("BUILD PKGA!"),
-            "pkgb/conanfile.py": GenConanfile("pkgb", "0.1").with_build_msg("BUILD PKGB!")
-                                                            .with_requires("pkga/0.1")})
-    c.run("workspace add pkga")
-    c.run("workspace add pkgb")
+        c.run("install --requires=pkgb/0.1 --build=editable")
+        c.assert_listed_binary({"pkga/0.1": ("da39a3ee5e6b4b0d3255bfef95601890afd80709",
+                                             "EditableBuild"),
+                                "pkgb/0.1": ("47a5f20ec8fb480e1c5794462089b01a3548fdc5",
+                                             "EditableBuild")})
+        assert "pkga/0.1: WARN: BUILD PKGA!" in c.out
+        assert "pkgb/0.1: WARN: BUILD PKGB!" in c.out
 
-    c.run("install --requires=pkgb/0.1 --build=editable")
-    c.assert_listed_binary({"pkga/0.1": ("da39a3ee5e6b4b0d3255bfef95601890afd80709",
-                                         "EditableBuild"),
-                            "pkgb/0.1": ("47a5f20ec8fb480e1c5794462089b01a3548fdc5",
-                                         "EditableBuild")})
-    assert "pkga/0.1: WARN: BUILD PKGA!" in c.out
-    assert "pkgb/0.1: WARN: BUILD PKGB!" in c.out
+
+class TestConfig:
+    def test_profiles(self):
+        """
+        What configuration makes sense as local?
+        - Custom profiles? But how they apply to dependencies
+        - Settings.yml
+        - Global.conf
+        - Hooks YES
+        - Plugins:
+           - compatibility.py
+
+        """
+        c = TestClient()
+        c.save({"conanws.yml": "config_folder: myconfig",
+                "myconfig/profiles/myprofile": ""})
+        c.run("profile path myprofile")
+        print(c.out)
 
 
 @pytest.mark.tool("cmake", "3.28")
