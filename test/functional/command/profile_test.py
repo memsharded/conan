@@ -134,6 +134,9 @@ class DetectCompilersTest(unittest.TestCase):
         assert "Profile './MyProfile2' already exists, skipping detection" in c.out
         assert c.load("MyProfile2") == "potato"
 
+        c.run("profile detect --name=new_profile")  # In the cache
+        assert ".conan2/profiles/new_profile" in c.out.replace("\\", "/")
+
     @pytest.mark.skipif(platform.system() != "Windows", reason="Requires Windows and msvc")
     def test_profile_new_msvc_vcvars(self):
         c = TestClient()

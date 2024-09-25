@@ -63,10 +63,9 @@ def profile_detect(conan_api, parser, subparser, *args):
     args = parser.parse_args(*args)
 
     profile_name = args.name or "default"
-    if profile_name[:2] in ("./", ".\\") or profile_name.startswith(".."):  # local
-        profile_pathname = os.path.abspath(os.path.join(os.getcwd(), profile_name))
-    else:
-        profile_pathname = conan_api.profiles.default_folder()
+    local_profile = profile_name[:2] in ("./", ".\\") or profile_name.startswith("..")
+    base_folder = os.getcwd() if local_profile else conan_api.profiles.default_folder()
+    profile_pathname = os.path.abspath(os.path.join(base_folder, profile_name))
     if os.path.exists(profile_pathname):
         if args.exist_ok:
             ConanOutput().info(f"Profile '{profile_name}' already exists, skipping detection")
