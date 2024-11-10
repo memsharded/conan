@@ -27,12 +27,13 @@ from webtest.app import TestApp
 from conan.cli.exit_codes import SUCCESS, ERROR_GENERAL
 from conan.internal.cache.cache import PackageLayout, RecipeLayout, PkgCache
 from conan.internal.cache.home_paths import HomePaths
-from conans import REVISIONS
+from conan.internal import REVISIONS
 from conan.api.conan_api import ConanAPI
 from conan.api.model import Remote
 from conan.cli.cli import Cli, _CONAN_INTERNAL_CUSTOM_COMMANDS_PATH
-from conans.util.env import environment_update
-from conans.errors import NotFoundException, ConanException
+from conan.test.utils.env import environment_update
+from conan.internal.errors import NotFoundException
+from conan.errors import ConanException
 from conans.model.manifest import FileTreeManifest
 from conans.model.package_ref import PkgReference
 from conans.model.profile import Profile
@@ -46,7 +47,6 @@ from conan.test.utils.mocks import RedirectedTestOutput
 from conan.test.utils.scm import create_local_git_repo
 from conan.test.utils.server_launcher import (TestServerLauncher)
 from conan.test.utils.test_files import temp_folder
-from conans.util.env import get_env
 from conans.util.files import mkdir, save_files, save, load
 
 NO_SETTINGS_PACKAGE_ID = "da39a3ee5e6b4b0d3255bfef95601890afd80709"
@@ -365,7 +365,7 @@ class TestServer(object):
         return tmp
 
 
-if get_env("CONAN_TEST_WITH_ARTIFACTORY", False):
+if os.environ.get("CONAN_TEST_WITH_ARTIFACTORY"):
     TestServer = ArtifactoryServer
 
 
@@ -456,7 +456,7 @@ class TestClient:
         # create default profile
         if light:
             text = "[settings]\nos=Linux"  # Needed at least build-os
-            save(self.cache.settings_path, "os: [Linux]")
+            save(self.cache.settings_path, "os: [Linux, Windows]")
         else:
             text = default_profiles[platform.system()]
         save(self.cache.default_profile_path, text)
