@@ -28,6 +28,8 @@ BUILT_IN_CONFS = {
     "core.download:retry_wait": "Seconds to wait between download attempts from Conan server",
     "core.download:download_cache": "Define path to a file download cache",
     "core.cache:storage_path": "Absolute path where the packages and database are stored",
+    "core.cache:long_storage_path": "Absolute path where the long term storage packages are stored",
+    "core.cache:long_storage_packages": "List of patterns of packages in long term storage",
     # Sources backup
     "core.sources:download_cache": "Folder to store the sources backup",
     "core.sources:download_urls": "List of URLs to download backup sources from",

@@ -44,7 +44,8 @@ class PkgCache:
         return self._base_folder
 
     def _store_folder(self, ref):
-        if self._long_patterns and any(ref.matches(p) for p in self._long_patterns):
+        if self._long_patterns and any(ref.matches(p, is_consumer=False)
+                                       for p in self._long_patterns):
             return self._long_folder
         return self._base_folder
 
