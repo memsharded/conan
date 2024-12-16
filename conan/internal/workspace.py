@@ -125,7 +125,6 @@ class Workspace:
         self._yml = self._yml or {}
         found_ref = None
         path = self._rel_path(path)
-
         for ref, info in self._yml.get("editables", {}).items():
             if os.path.dirname(info["path"]).replace("\\", "/") == path:
                 found_ref = ref

@@ -5,7 +5,6 @@ from conan.cli import make_abs_path
 from conan.internal.conan_app import ConanApp
 from conan.internal.workspace import Workspace
 from conan.tools.scm import Git
-
 from conan.errors import ConanException
 from conans.client.graph.graph import RECIPE_EDITABLE
 from conans.client.source import retrieve_exports_sources
