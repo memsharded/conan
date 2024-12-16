@@ -3,8 +3,15 @@ from pathlib import Path
 
 import yaml
 
+<<<<<<< HEAD
 from conans.client.loader import load_python_file
 from conans.errors import ConanException
+=======
+from conan.api.output import ConanOutput
+from conans.client.loader import load_python_file
+from conan.errors import ConanException
+from conans.model.recipe_ref import RecipeReference
+>>>>>>> develop2
 from conans.util.files import load, save
 
 
@@ -17,9 +24,38 @@ def _find_ws_folder():
             path = path.parent
 
 
+<<<<<<< HEAD
 class Workspace:
     def __init__(self):
         self._folder = _find_ws_folder()
+=======
+class _UserWorkspaceAPI:
+    def __init__(self, folder):
+        self.folder = folder
+
+    def load(self, conanfile_path):
+        conanfile_path = os.path.join(self.folder, conanfile_path)
+        from conans.client.loader import ConanFileLoader
+        loader = ConanFileLoader(pyreq_loader=None, conanfile_helpers=None)
+        conanfile = loader.load_named(conanfile_path, name=None, version=None, user=None,
+                                      channel=None, remotes=None, graph_lock=None)
+        return conanfile
+
+
+class Workspace:
+    TEST_ENABLED = False
+
+    def __init__(self):
+        self._folder = _find_ws_folder()
+        if self._folder:
+            ConanOutput().warning(f"Workspace found: {self._folder}")
+            if (Workspace.TEST_ENABLED or os.getenv("CONAN_WORKSPACE_ENABLE")) != "will_break_next":
+                ConanOutput().warning("Workspace ignored as CONAN_WORKSPACE_ENABLE is not set")
+                self._folder = None
+            else:
+                ConanOutput().warning(f"Workspace is a dev-only feature, exclusively for testing")
+
+>>>>>>> develop2
         self._yml = None
         self._py = None
         if self._folder is not None:
@@ -33,6 +69,10 @@ class Workspace:
             py_file = os.path.join(self._folder, "conanws.py")
             if os.path.exists(py_file):
                 self._py, _ = load_python_file(py_file)
+<<<<<<< HEAD
+=======
+                setattr(self._py, "workspace_api", _UserWorkspaceAPI(self._folder))
+>>>>>>> develop2
                 setattr(self._py, "conanws_data", self._yml)
 
     @property
@@ -76,15 +116,39 @@ class Workspace:
         """
         self._check_ws()
         self._yml = self._yml or {}
+<<<<<<< HEAD
         self._yml.setdefault("editables", {})[str(ref)] = {"path": path,
                                                            "output_folder": output_folder}
         save(self._yml_file, yaml.dump(self._yml))
 
+=======
+        editable = {"path": self._rel_path(path)}
+        if output_folder:
+            editable["output_folder"] = self._rel_path(output_folder)
+        self._yml.setdefault("editables", {})[str(ref)] = editable
+        save(self._yml_file, yaml.dump(self._yml))
+
+    def _rel_path(self, path):
+        if path is None:
+            return None
+        if not os.path.isabs(path):
+            raise ConanException(f"Editable path must be absolute: {path}")
+        path = os.path.relpath(path, self._folder)
+        if path.startswith(".."):
+            raise ConanException(f"Editable path must be inside the workspace folder: "
+                                 f"{self._folder}")
+        return path.replace("\\", "/")  # Normalize to unix path
+
+>>>>>>> develop2
     def remove(self, path):
         self._check_ws()
         self._yml = self._yml or {}
         found_ref = None
+<<<<<<< HEAD
         path = path.replace("\\", "/")
+=======
+        path = self._rel_path(path)
+>>>>>>> develop2
         for ref, info in self._yml.get("editables", {}).items():
             if os.path.dirname(info["path"]).replace("\\", "/") == path:
                 found_ref = ref
@@ -100,12 +164,25 @@ class Workspace:
             return
         editables = self._attr("editables")
         if editables:
+<<<<<<< HEAD
             for v in editables.values():
                 v["workspace"] = {"name": self.name,
                                   "folder": self._folder}
         return editables
 
     def serialize(self):
+=======
+            editables = {RecipeReference.loads(r): v.copy() for r, v in editables.items()}
+            for v in editables.values():
+                v["path"] = os.path.normpath(os.path.join(self._folder, v["path"]))
+                if v.get("output_folder"):
+                    v["output_folder"] = os.path.normpath(os.path.join(self._folder,
+                                                                       v["output_folder"]))
+        return editables
+
+    def serialize(self):
+        self._check_ws()
+>>>>>>> develop2
         return {"name": self.name,
                 "folder": self._folder,
                 "editables": self._attr("editables")}

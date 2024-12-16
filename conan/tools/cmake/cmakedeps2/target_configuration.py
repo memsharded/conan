@@ -4,6 +4,7 @@ import textwrap
 import jinja2
 from jinja2 import Template
 
+from conan.api.output import ConanOutput
 from conan.errors import ConanException
 from conans.client.graph.graph import CONTEXT_BUILD, CONTEXT_HOST
 from conans.model.pkg_type import PackageType
@@ -39,7 +40,11 @@ class TargetConfigurationTemplate2:
         transitive_reqs = self._cmakedeps.get_transitive_requires(self._conanfile)
         if not requires and not components:  # global cpp_info without components definition
             # require the pkgname::pkgname base (user defined) or INTERFACE base target
-            return [f"{d.ref.name}::{d.ref.name}" for d in transitive_reqs.values()]
+            targets = []
+            for d in transitive_reqs.values():
+                dep_target = self._cmakedeps.get_property("cmake_target_name", d)
+                targets.append(dep_target or f"{d.ref.name}::{d.ref.name}")
+            return targets
 
         for required_pkg, required_comp in requires:
             if required_pkg is None:  # Points to a component of same package
@@ -162,7 +167,7 @@ class TargetConfigurationTemplate2:
                   "system_libs": system_libs}
 
         if info.frameworks:
-            self._conanfile.output.warning("frameworks not supported yet in new CMakeDeps generator")
+            ConanOutput(scope=str(self._conanfile)).warning("frameworks not supported yet in new CMakeDeps generator")
 
         if info.libs:
             if len(info.libs) != 1:
@@ -192,6 +197,7 @@ class TargetConfigurationTemplate2:
         """
         root_target_name = self._cmakedeps.get_property("cmake_target_name", self._conanfile)
         root_target_name = root_target_name or f"{pkg_name}::{pkg_name}"
+        # TODO: What if an exe target is called like the pkg_name::pkg_name
         if libs and root_target_name not in libs:
             # Add a generic interface target for the package depending on the others
             if cpp_info.default_components is not None:

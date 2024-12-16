@@ -6,13 +6,14 @@ from conan.api.output import ConanOutput, cli_out_write
 from conan.cli import make_abs_path
 from conan.cli.args import add_reference_args
 from conan.cli.command import conan_command, conan_subcommand
-from conans.errors import ConanException
+from conan.cli.commands.list import print_serial
+from conan.errors import ConanException
 
 
 @conan_subcommand(formatters={"text": cli_out_write})
 def workspace_root(conan_api: ConanAPI, parser, subparser, *args):
     """
-    Return the folder containing the conanws.py workspace file
+    Return the folder containing the conanws.py/conanws.yml workspace file
     """
     ws = conan_api.workspace
     if not ws.folder():
@@ -62,6 +63,7 @@ def workspace_add(conan_api: ConanAPI, parser, subparser, *args):
     cwd = os.getcwd()
     path = args.path
     if args.ref:
+        # TODO: Use path here to open in this path
         path = conan_api.workspace.open(args.ref, remotes, cwd=cwd)
     ref = conan_api.workspace.add(path,
                                   args.name, args.version, args.user, args.channel,
@@ -76,8 +78,8 @@ def workspace_remove(conan_api: ConanAPI, parser, subparser, *args):
     """
     subparser.add_argument('path', help='Path to the package folder in the user workspace')
     args = parser.parse_args(*args)
-    conan_api.workspace.remove(make_abs_path(args.path))
-    ConanOutput().info("Removed {")
+    removed = conan_api.workspace.remove(make_abs_path(args.path))
+    ConanOutput().info(f"Removed from workspace: {removed}")
 
 
 def print_json(data):
@@ -86,7 +88,11 @@ def print_json(data):
     cli_out_write(myjson)
 
 
-@conan_subcommand(formatters={"text": cli_out_write, "json": print_json})
+def _print_workspace_info(data):
+    print_serial(data["info"])
+
+
+@conan_subcommand(formatters={"text": _print_workspace_info, "json": print_json})
 def workspace_info(conan_api: ConanAPI, parser, subparser, *args):
     """
     Display info for current workspace
@@ -98,5 +104,5 @@ def workspace_info(conan_api: ConanAPI, parser, subparser, *args):
 @conan_command(group="Consumer")
 def workspace(conan_api, parser, *args):
     """
-    Manage the remote list and the users authenticated on them.
+    Manage Conan workspaces (group of packages in editable mode)
     """
