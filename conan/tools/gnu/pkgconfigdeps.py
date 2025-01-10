@@ -175,14 +175,14 @@ class _PCGenerator:
             # For instance, dep == "hello/1.0" and req == "other::cmp1" -> hello != other
             if dep_ref_name != pkg_ref_name:
                 try:
-                    req_conanfile = self._transitive_reqs[pkg_ref_name]
+                    req, dep = self._transitive_reqs._get(pkg_ref_name)
                 except KeyError:
                     continue  # If the dependency is not in the transitive, might be skipped
             else:  # For instance, dep == "hello/1.0" and req == "hello::cmp1" -> hello == hello
-                req_conanfile = self._dep
-            comp_name = self._get_component_name(req_conanfile, comp_ref_name)
+                req, dep = self._require, self._dep
+            comp_name = self._get_component_name(dep, comp_ref_name, req=req)
             if not comp_name:
-                pkg_name = self._get_package_name(req_conanfile)
+                pkg_name = self._get_package_name(dep, req=req)
                 # Creating a component name with namespace, e.g., dep-comp1
                 comp_name = self._get_name_with_namespace(pkg_name, comp_ref_name)
             ret.append(comp_name)
@@ -230,8 +230,8 @@ class _PCGenerator:
         if not requires:
             # If no requires were found, let's try to get all the direct visible dependencies,
             # e.g., requires = "other_pkg/1.0"
-            requires = [self._get_package_name(req)
-                        for req in self._transitive_reqs.values()]
+            requires = [self._get_package_name(dep, req=req)
+                        for req, dep in self._transitive_reqs.items()]
         description = "Conan package: %s" % pkg_name
         pkg_version = (self.get_property("system_package_version", self._dep)
                        or self._dep.ref.version)
@@ -313,38 +313,42 @@ class _PCGenerator:
         """
         return f"{namespace}-{name}"
 
-    def _get_package_aliases(self, dep):
-        pkg_aliases = self.get_property("pkg_config_aliases", dep, check_type=list)
+    def _get_package_aliases(self, dep, req=None):
+        pkg_aliases = self.get_property("pkg_config_aliases", dep, check_type=list, req=req)
         return pkg_aliases or []
 
-    def _get_component_aliases(self, dep, comp_name):
+    def _get_component_aliases(self, dep, comp_name, req=None):
+        req = req or self._require
         if comp_name not in dep.cpp_info.components:
             # foo::foo might be referencing the root cppinfo
-            if dep.ref.name == comp_name:
-                return self._get_package_aliases(dep)
+            if req.ref.name == comp_name:
+                return self._get_package_aliases(dep, req=req)
             raise ConanException("Component '{name}::{cname}' not found in '{name}' "
-                                 "package requirement".format(name=dep.ref.name,
+                                 "package requirement".format(name=req.ref.name,
                                                               cname=comp_name))
-        comp_aliases = self.get_property("pkg_config_aliases", dep, comp_name, check_type=list)
+        comp_aliases = self.get_property("pkg_config_aliases", dep, comp_name, check_type=list, req=req)
         return comp_aliases or []
 
-    def _get_package_name(self, dep):
-        pkg_name = self.get_property("pkg_config_name", dep) or dep.ref.name
+    def _get_package_name(self, dep, req=None):
+        req = req or self._require
+        pkg_name = self.get_property("pkg_config_name", dep, req=req) or req.ref.name
         return f"{pkg_name}{self._suffix}"
 
-    def _get_component_name(self, dep, comp_name):
+    def _get_component_name(self, dep, comp_name, req=None):
+        req = req or self._require
         if comp_name not in dep.cpp_info.components:
             # foo::foo might be referencing the root cppinfo
-            if dep.ref.name == comp_name:
-                return self._get_package_name(dep)
+            if req.ref.name == comp_name:
+                return self._get_package_name(dep, req=req)
             raise ConanException("Component '{name}::{cname}' not found in '{name}' "
                                  "package requirement".format(name=dep.ref.name,
                                                               cname=comp_name))
-        comp_name = self.get_property("pkg_config_name", dep, comp_name)
+        comp_name = self.get_property("pkg_config_name", dep, comp_name, req=req)
         return f"{comp_name}{self._suffix}" if comp_name else None
 
-    def get_property(self, prop, dep, comp_name=None, check_type=None):
-        dep_name = dep.ref.name
+    def get_property(self, prop, dep, comp_name=None, check_type=None, req=None):
+        req = req or self._require
+        dep_name = req.ref.name
         dep_comp = f"{str(dep_name)}::{comp_name}" if comp_name else f"{str(dep_name)}"
         try:
             value = self._properties[f"{dep_comp}{self._suffix}"][prop]

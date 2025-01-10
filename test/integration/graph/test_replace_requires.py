@@ -373,3 +373,51 @@ def test_replace_requires_multiple():
     # There are actually 2 dependencies, pointing to the same node
     assert "libepoxy/0.1: DEP: opengl: libgl" in c.out
     assert "libepoxy/0.1: DEP: egl: libgl" in c.out
+
+
+def test_replace_requires_transitive():
+    # https://github.com/conan-io/conan/issues/17557
+    c = TestClient()
+    # IMPORTANT: The replacement package must be target-compatible
+    zlib_ng = textwrap.dedent("""
+        from conan import ConanFile
+        class ZlibNG(ConanFile):
+            name = "zlib-ng"
+            version = "0.1"
+            def package_info(self):
+                self.cpp_info.set_property("cmake_file_name", "ZLIB")
+                self.cpp_info.set_property("cmake_target_name", "ZLIB::ZLIB")
+        """)
+    openssl = textwrap.dedent("""
+        from conan import ConanFile
+        class openssl(ConanFile):
+            name = "openssl"
+            version = "0.1"
+            requires = "zlib/0.1"
+            def package_info(self):
+                self.cpp_info.components["crypto"].includedirs = []
+                self.cpp_info.components["crypto"].requires = ["zlib::zlib"]
+        """)
+    conanfile = textwrap.dedent("""
+        from conan import ConanFile
+        class App(ConanFile):
+            name = "app"
+            version = "0.1"
+            settings = "build_type"
+            requires = "openssl/0.1",
+            generators = "CMakeDeps", "PkgConfigDeps"
+        """)
+    profile = textwrap.dedent("""
+        [replace_requires]
+        zlib/0.1: zlib-ng/0.1
+        """)
+    c.save({"zlibng/conanfile.py": zlib_ng,
+            "openssl/conanfile.py": openssl,
+            "app/conanfile.py": conanfile,
+            "profile": profile})
+
+    c.run("create zlibng")
+    c.run("create openssl -pr=profile")
+    c.run("build app -pr=profile")
+    print(c.out)
+    assert "zlib/0.1: zlib-ng/0.1" in c.out
