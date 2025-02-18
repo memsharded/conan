@@ -2,20 +2,20 @@ import json
 import os
 import platform
 import stat
+import textwrap
 import unittest
 from collections import OrderedDict
 
 import pytest
-import requests
 from mock import patch
 from requests import Response
 
 from conan.errors import ConanException
-from conans.model.package_ref import PkgReference
-from conans.model.recipe_ref import RecipeReference
+from conan.api.model import PkgReference
+from conan.api.model import RecipeReference
 from conan.internal.paths import EXPORT_SOURCES_TGZ_NAME, PACKAGE_TGZ_NAME
 from conan.test.utils.tools import NO_SETTINGS_PACKAGE_ID, TestClient, TestServer, \
-    TurboTestClient, GenConanfile, TestRequester, TestingResponse
+    GenConanfile, TestRequester, TestingResponse
 from conans.util.files import gzopen_without_timestamps, is_dirty, save, set_dirty
 
 conanfile = """from conan import ConanFile
@@ -54,29 +54,36 @@ class UploadTest(unittest.TestCase):
 
     @pytest.mark.artifactory_ready
     def test_upload_force(self):
-        ref = RecipeReference.loads("hello/0.1@conan/testing")
-        client = TurboTestClient(default_server_user=True)
-        pref = client.create(ref, conanfile=GenConanfile().with_package_file("myfile.sh", "foo"))
+        client = TestClient(default_server_user=True)
+        conanfile_ = textwrap.dedent("""
+            from conan import ConanFile
+            from conan.tools.files import copy
+            class MyPkg(ConanFile):
+                name = "hello"
+                version = "0.1"
+                def package(self):
+                    copy(self, "myfile.sh", src=self.source_folder, dst=self.package_folder)
+            """)
+        client.save({"conanfile.py": conanfile_,
+                    "myfile.sh": "foo"})
+
+        client.run("export-pkg .")
         client.run("upload * --confirm -r default")
         assert "Uploading package 'hello" in client.out
         client.run("upload * --confirm -r default")
         assert "Uploading package" not in client.out
 
-        package_folder = client.get_latest_pkg_layout(pref).package()
-        package_file_path = os.path.join(package_folder, "myfile.sh")
-
         if platform.system() == "Linux":
-            client.run("remove '*' -c")
-            client.create(ref, conanfile=GenConanfile().with_package_file("myfile.sh", "foo"))
-            package_folder = client.get_latest_pkg_layout(pref).package()
-            package_file_path = os.path.join(package_folder, "myfile.sh")
+            package_file_path = os.path.join(client.current_folder, "myfile.sh")
             os.system('chmod +x "{}"'.format(package_file_path))
-            self.assertTrue(os.stat(package_file_path).st_mode & stat.S_IXUSR)
+            assert os.stat(package_file_path).st_mode & stat.S_IXUSR
+            client.run("export-pkg .")
+
             client.run("upload * --confirm -r default")
             # Doesn't change revision, doesn't reupload
-            self.assertNotIn("-> conan_package.tgz", client.out)
-            self.assertIn("skipping upload", client.out)
-            self.assertNotIn("Compressing package...", client.out)
+            assert "conan_package.tgz" not in client.out
+            assert "skipping upload" in client.out
+            assert "Compressing package..." not in client.out
 
         # with --force it really re-uploads it
         client.run("upload * --confirm --force -r default")
@@ -85,11 +92,11 @@ class UploadTest(unittest.TestCase):
 
         if platform.system() == "Linux":
             client.run("remove '*' -c")
-            client.run("install --requires={}".format(ref))
-            package_folder = client.get_latest_pkg_layout(pref).package()
-            package_file_path = os.path.join(package_folder, "myfile.sh")
+            client.run("install --requires=hello/0.1 --deployer=full_deploy")
+            package_file_path = os.path.join(client.current_folder, "full_deploy", "host", "hello",
+                                             "0.1", "myfile.sh")
             # Owner with execute permissions
-            self.assertTrue(os.stat(package_file_path).st_mode & stat.S_IXUSR)
+            assert os.stat(package_file_path).st_mode & stat.S_IXUSR
 
     @pytest.mark.artifactory_ready
     def test_pattern_upload(self):
@@ -395,24 +402,6 @@ class UploadTest(unittest.TestCase):
         client.run("upload hello0/1.2.1@user/testing -r server2")
         self.assertNotIn("ERROR: 'server1'", client.out)
 
-    def test_concurrent_upload(self):
-        # https://github.com/conan-io/conan/issues/4953
-        server = TestServer()
-        servers = OrderedDict([("default", server)])
-        client = TurboTestClient(servers=servers, inputs=["admin", "password"])
-        client2 = TurboTestClient(servers=servers, inputs=["admin", "password"])
-
-        ref = RecipeReference.loads("lib/1.0@conan/testing")
-        client.create(ref)
-        rrev = client.exported_recipe_revision()
-        client.upload_all(ref)
-        # Upload same with client2
-        client2.create(ref)
-        client2.run("upload lib/1.0@conan/testing -r default")
-        self.assertIn(f"'lib/1.0@conan/testing#{rrev}' already in "
-                      "server, skipping upload", client2.out)
-        self.assertNotIn("WARN", client2.out)
-
     def test_upload_without_user_channel(self):
         server = TestServer(users={"user": "password"}, write_permissions=[("*/*@*/*", "*")])
         servers = {"default": server}
@@ -450,12 +439,6 @@ class UploadTest(unittest.TestCase):
                 self.status_code = 401
                 self.content = b''
 
-        class ErrorApiResponse(object):
-            def __init__(self):
-                self.ok = False
-                self.status_code = 400
-                self.content = "Unsupported Conan v1 repository request for 'conan'"
-
         class ServerCapabilitiesRequester(TestRequester):
             def __init__(self, *args, **kwargs):
                 self._first_ping = True
@@ -463,17 +446,14 @@ class UploadTest(unittest.TestCase):
 
             def get(self, url, **kwargs):
                 app, url = self._prepare_call(url, kwargs)
-                if app:
-                    if url.endswith("ping") and self._first_ping:
-                        self._first_ping = False
-                        return EmptyCapabilitiesResponse()
-                    elif "hello0" in url and "1.2.1" in url and "v1" in url:
-                        return ErrorApiResponse()
-                    else:
-                        response = app.get(url, **kwargs)
-                        return TestingResponse(response)
+                assert app
+                assert ("/v1/" in url and url.endswith("ping")) or "/v2" in url
+                if url.endswith("ping") and self._first_ping:
+                    self._first_ping = False
+                    return EmptyCapabilitiesResponse()
                 else:
-                    return requests.get(url, **kwargs)
+                    response = app.get(url, **kwargs)
+                    return TestingResponse(response)
 
         server = TestServer(users={"user": "password"}, write_permissions=[("*/*@*/*", "*")])
         servers = {"default": server}

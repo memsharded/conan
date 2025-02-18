@@ -4,10 +4,10 @@ from conan.api.output import ConanOutput
 from conan.errors import ConanException
 from conan.internal.errors import conanfile_exception_formatter, conanfile_remove_attr
 from conan.internal.paths import CONANINFO
-from conans.model.manifest import FileTreeManifest
-from conans.model.package_ref import PkgReference
-from conans.model.pkg_type import PackageType
-from conans.model.requires import BuildRequirements, TestRequirements, ToolRequirements
+from conan.internal.model.manifest import FileTreeManifest
+from conan.api.model import PkgReference
+from conan.internal.model.pkg_type import PackageType
+from conan.internal.model.requires import BuildRequirements, TestRequirements, ToolRequirements
 from conans.util.files import mkdir, chdir, save
 
 
@@ -93,7 +93,7 @@ def run_configure_method(conanfile, down_options, profile_options, ref):
     auto_language(conanfile)  # default implementation removes `compiler.cstd`
 
     # Assign only the current package options values, but none of the dependencies
-    is_consumer = conanfile._conan_is_consumer
+    is_consumer = conanfile._conan_is_consumer  # noqa
     conanfile.options.apply_downstream(down_options, profile_options, ref, is_consumer)
 
     if hasattr(conanfile, "configure"):

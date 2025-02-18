@@ -2,8 +2,8 @@ import os
 
 from conan.api.output import ConanOutput
 from conan.errors import ConanException
-from conans.model.package_ref import PkgReference
-from conans.model.recipe_ref import RecipeReference
+from conan.api.model import PkgReference
+from conan.api.model import RecipeReference
 
 
 class IntegrityChecker:
@@ -17,8 +17,8 @@ class IntegrityChecker:
         This is to be done over the package contents, not the compressed conan_package.tgz
         artifacts
     """
-    def __init__(self, app):
-        self._app = app
+    def __init__(self, cache):
+        self._cache = cache
 
     def check(self, upload_data):
         corrupted = False
@@ -30,9 +30,13 @@ class IntegrityChecker:
             raise ConanException("There are corrupted artifacts, check the error logs")
 
     def _recipe_corrupted(self, ref: RecipeReference):
-        layout = self._app.cache.recipe_layout(ref)
+        layout = self._cache.recipe_layout(ref)
         output = ConanOutput()
-        read_manifest, expected_manifest = layout.recipe_manifests()
+        try:
+            read_manifest, expected_manifest = layout.recipe_manifests()
+        except FileNotFoundError:
+            output.error(f"{ref.repr_notime()}: Manifest missing", error_type="exception")
+            return True
         # Filter exports_sources from read manifest if there are no exports_sources locally
         # This happens when recipe is downloaded without sources (not built from source)
         export_sources_folder = layout.export_sources()
@@ -50,9 +54,13 @@ class IntegrityChecker:
         output.info(f"{ref}: Integrity checked: ok")
 
     def _package_corrupted(self, ref: PkgReference):
-        layout = self._app.cache.pkg_layout(ref)
+        layout = self._cache.pkg_layout(ref)
         output = ConanOutput()
-        read_manifest, expected_manifest = layout.package_manifests()
+        try:
+            read_manifest, expected_manifest = layout.package_manifests()
+        except FileNotFoundError:
+            output.error(f"{ref.repr_notime()}: Manifest missing", error_type="exception")
+            return True
 
         if read_manifest != expected_manifest:
             output.error(f"{ref}: Manifest mismatch", error_type="exception")

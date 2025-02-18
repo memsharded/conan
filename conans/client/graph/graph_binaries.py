@@ -16,9 +16,9 @@ from conans.client.graph.proxy import should_update_reference
 from conan.internal.errors import conanfile_exception_formatter, ConanConnectionError, NotFoundException, \
     PackageNotFoundException
 from conan.errors import ConanException
-from conans.model.info import RequirementInfo, RequirementsInfo
-from conans.model.package_ref import PkgReference
-from conans.model.recipe_ref import RecipeReference
+from conan.internal.model.info import RequirementInfo, RequirementsInfo
+from conan.api.model import PkgReference
+from conan.api.model import RecipeReference
 from conans.util.files import load
 
 
@@ -230,6 +230,10 @@ class GraphBinariesAnalyzer:
                                               "didn't enable 'tools.graph:vendor=build' to compute " \
                                               "its dependencies"
                 node.binary = BINARY_INVALID
+            if any(n.node.binary in (BINARY_EDITABLE, BINARY_EDITABLE_BUILD)
+                   for n in node.transitive_deps.values()):
+                conanfile.output.warning("Package is being built in the cache using editable "
+                                         "dependencies, this is dangerous", warn_tag="risk")
 
     def _process_node(self, node, build_mode, remotes, update):
         # Check that this same reference hasn't already been checked
@@ -486,15 +490,11 @@ class GraphBinariesAnalyzer:
                 is_consumer = not (node.recipe != RECIPE_CONSUMER and
                                    node.binary not in (BINARY_BUILD, BINARY_EDITABLE_BUILD,
                                                        BINARY_EDITABLE))
-                deps_required = set(d.node for d in node.transitive_deps.values() if d.require.files
-                                    or (d.require.direct and is_consumer))
-
-                # second pass, transitive affected. Packages that have some dependency that is required
-                # cannot be skipped either. In theory the binary could be skipped, but build system
-                # integrations like CMakeDeps rely on find_package() to correctly find transitive deps
-                indirect = (d.node for d in node.transitive_deps.values()
-                            if any(t.node in deps_required for t in d.node.transitive_deps.values()))
-                deps_required.update(indirect)
+                deps_required = set()
+                for req, t in node.transitive_deps.items():
+                    if req.files or (req.direct and is_consumer):
+                        deps_required.add(t.node)
+                        deps_required.update(req.required_nodes)
 
                 # Third pass, mark requires as skippeable
                 for dep in node.transitive_deps.values():

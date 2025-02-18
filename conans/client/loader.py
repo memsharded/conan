@@ -18,11 +18,11 @@ from conan.tools.microsoft import vs_layout
 from conans.client.loader_txt import ConanFileTextLoader
 from conan.internal.errors import conanfile_exception_formatter, NotFoundException
 from conan.errors import ConanException
-from conans.model.conan_file import ConanFile
-from conans.model.options import Options
-from conans.model.recipe_ref import RecipeReference
+from conan.internal.model.conan_file import ConanFile
+from conan.internal.model.options import Options
+from conan.api.model import RecipeReference
 from conan.internal.paths import DATA_YML
-from conans.model.version_range import validate_conan_version
+from conan.internal.model.version_range import validate_conan_version
 from conans.util.files import load, chdir, load_user_encoded
 
 
@@ -171,11 +171,8 @@ class ConanFileLoader:
         else:
             conanfile.display_name = os.path.basename(conanfile_path)
         conanfile.output.scope = conanfile.display_name
-        try:
-            conanfile._conan_is_consumer = True
-            return conanfile
-        except Exception as e:  # re-raise with file name
-            raise ConanException("%s: %s" % (conanfile_path, str(e)))
+        conanfile._conan_is_consumer = True
+        return conanfile
 
     def load_conanfile(self, conanfile_path, ref, graph_lock=None, remotes=None,
                        update=None, check_update=None):
@@ -396,7 +393,7 @@ def _get_required_conan_version_without_loading(conan_file_path):
         found = re.search(r"(.*)required_conan_version\s*=\s*[\"'](.*)[\"']", contents)
         if found and "#" not in found.group(1):
             txt_version = found.group(2)
-    except:
+    except:  # noqa this should be solid, cannot fail
         pass
 
     return txt_version

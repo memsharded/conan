@@ -15,7 +15,7 @@ from conan.tools.cmake.cmakedeps.templates.target_data import ConfigDataTemplate
 from conan.tools.cmake.cmakedeps.templates.targets import TargetsTemplate
 from conan.tools.files import save
 from conan.errors import ConanException
-from conans.model.dependencies import get_transitive_requires
+from conan.internal.model.dependencies import get_transitive_requires
 
 
 class CMakeDeps(object):
@@ -105,7 +105,7 @@ class CMakeDeps(object):
                 msg.append(f"    find_package({config.file_name})")
             targets = ' '.join(c.root_target_name for c in direct_configs)
             msg.append(f"    target_link_libraries(... {targets})")
-            if self._conanfile._conan_is_consumer:
+            if self._conanfile._conan_is_consumer:  # noqa
                 self._conanfile.output.info("\n".join(msg), fg=Color.CYAN)
             else:
                 self._conanfile.output.verbose("\n".join(msg))

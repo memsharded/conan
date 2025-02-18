@@ -12,8 +12,8 @@ from conan.internal.cache.conan_reference_layout import RecipeLayout, PackageLay
 from conan.internal.cache.db.cache_database import CacheDatabase
 from conan.internal.errors import ConanReferenceAlreadyExistsInDB
 from conan.errors import ConanException
-from conans.model.package_ref import PkgReference
-from conans.model.recipe_ref import RecipeReference
+from conan.api.model import PkgReference
+from conan.api.model import RecipeReference
 from conans.util.dates import revision_timestamp_now
 from conans.util.files import rmdir, renamedir, mkdir
 
@@ -48,19 +48,6 @@ class PkgCache:
                                        for p in self._long_patterns):
             return self._long_folder
         return self._base_folder
-
-    def clean_temps(self):
-        temp_folder = os.path.join(self._base_folder, "t")
-        rmdir(temp_folder)
-        # Clean those build folders that didn't succeed to create a package and wont be in DB
-        builds_folder = os.path.join(self._base_folder, "b")
-        if os.path.isdir(builds_folder):
-            for subdir in os.listdir(builds_folder):
-                folder = os.path.join(builds_folder, subdir)
-                manifest = os.path.join(folder, "p", "conanmanifest.txt")
-                info = os.path.join(folder, "p", "conaninfo.txt")
-                if not os.path.exists(manifest) or not os.path.exists(info):
-                    rmdir(folder)
 
     def _create_path(self, relative_path, ref, remove_contents=True):
         path = self._full_path(relative_path, ref)

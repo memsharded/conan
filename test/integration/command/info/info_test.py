@@ -3,8 +3,7 @@ import os
 import textwrap
 
 from conan.cli.exit_codes import ERROR_GENERAL
-from conans.model.recipe_ref import RecipeReference
-from conan.test.utils.tools import NO_SETTINGS_PACKAGE_ID, TestClient, GenConanfile, TurboTestClient
+from conan.test.utils.tools import NO_SETTINGS_PACKAGE_ID, TestClient, GenConanfile
 
 
 class TestBasicCliOutput:
@@ -177,6 +176,15 @@ class TestJsonOutput:
         graph = json.loads(client.stdout)
         assert graph["graph"]["nodes"]["0"]["settings"]["build_type"] == "Debug"
 
+    def test_json_info_requirements(self):
+        c = TestClient()
+        c.save({"pkg/conanfile.py": GenConanfile("pkg", "0.1"),
+                "app/conanfile.py": GenConanfile().with_require("pkg/[>=0.0 <1.0]")})
+        c.run("create pkg")
+        c.run("graph info app --format=json")
+        graph = json.loads(c.stdout)
+        assert graph["graph"]["nodes"]["0"]["dependencies"]["1"]["require"] == "pkg/[>=0.0 <1.0]"
+
 
 class TestAdvancedCliOutput:
     """ Testing more advanced fields output, like SCM or PYTHON-REQUIRES
@@ -252,19 +260,6 @@ class TestEditables:
         c.run("graph info consumer --package-filter=pkg*")
         # FIXME: Paths are not diplayed yet
         assert "source_folder: None" in c.out
-
-
-class TestInfoRevisions:
-
-    def test_info_command_showing_revision(self):
-        """If I run 'conan info ref' I get information about the revision only in a v2 client"""
-        client = TurboTestClient()
-        ref = RecipeReference.loads("lib/1.0@conan/testing")
-
-        client.create(ref)
-        client.run("graph info --requires={}".format(ref))
-        revision = client.recipe_revision(ref)
-        assert f"ref: lib/1.0@conan/testing#{revision}" in client.out
 
 
 class TestInfoTestPackage:
