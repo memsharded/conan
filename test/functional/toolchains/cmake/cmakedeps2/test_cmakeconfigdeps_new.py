@@ -219,7 +219,7 @@ class TestLibs:
             assert "Conan: Target declared imported STATIC library 'engine::engine'" in c.out
 
     # if not using cmake >= 3.23 the intermediate gamelib_test linkage fail
-    @pytest.mark.tool("cmake", "3.23")
+    @pytest.mark.tool("cmake", "3.27")
     @pytest.mark.parametrize("shared", [False, True])
     def test_multilevel(self, shared):
         # TODO: make this shared fixtures in conftest for multi-level shared testing
@@ -338,8 +338,8 @@ class TestLibsIntegration:
         c.run(f"install app -c tools.cmake.cmakedeps:new={new_value} -g CMakeDeps")
         targets_cmake = c.load("app/pkg-Targets-release.cmake")
         assert "find_dependency(MyDep REQUIRED CONFIG)" in targets_cmake
-        assert 'set_target_properties(pkg::pkg PROPERTIES INTERFACE_LINK_LIBRARIES\n' \
-               '                      "$<$<CONFIG:RELEASE>:MyTargetDep>"' in targets_cmake
+        assert 'set_property(TARGET pkg::pkg APPEND PROPERTY INTERFACE_LINK_LIBRARIES\n' \
+               '             "$<$<CONFIG:RELEASE>:MyTargetDep>")' in targets_cmake
 
 
 class TestLibsLinkageTraits:
@@ -364,6 +364,7 @@ class TestLibsLinkageTraits:
         assert "engine/0.1: Hello World Release!"
         assert "game/0.1: Hello World Release!"
 
+    @pytest.mark.tool("cmake", "3.27")
     @pytest.mark.parametrize("shared", [False, True])
     def test_transitive_headers(self, shared):
         c = TestClient()
@@ -867,6 +868,9 @@ class TestToolRequires:
                                                               .with_tool_requires("tool/0.1")})
         c.run("create tool")
         c.run(f"install pkg -g CMakeDeps -c tools.cmake.cmakedeps:new={new_value}")
+        assert "find_package(tool) # Optional. This is a tool-require, " \
+               "can't link its targets" in c.out
+        assert "target_link_libraries" not in c.out
         tool_config = c.load("pkg/tool-config.cmake")
         assert 'set(tool_INCLUDE_DIRS' not in tool_config
         assert 'set(tool_INCLUDE_DIR' not in tool_config
@@ -1104,7 +1108,7 @@ class TestProtobuf:
         assert "protobuf: Release!" in c.out
 
 
-@pytest.mark.tool("cmake", "3.23")
+@pytest.mark.tool("cmake", "3.27")
 class TestConfigs:
     @pytest.mark.skipif(platform.system() != "Windows", reason="Only MSVC multi-conf")
     def test_multi_config(self, matrix_client):
@@ -1133,9 +1137,9 @@ class TestConfigs:
 
         # With modern CMake > 3.26 not necessary set(CMAKE_MAP_IMPORTED_CONFIG_DEBUG Release)
         cmake = textwrap.dedent("""
-            cmake_minimum_required(VERSION 3.15)
+            cmake_minimum_required(VERSION 3.27)
             project(app CXX)
-            set(CMAKE_MAP_IMPORTED_CONFIG_DEBUG Release)
+            # set(CMAKE_MAP_IMPORTED_CONFIG_DEBUG Release)
             find_package(matrix CONFIG REQUIRED)
 
             add_executable(app src/app.cpp src/main.cpp)
@@ -1151,6 +1155,41 @@ class TestConfigs:
         assert "matrix/1.0: Hello World Release!" in c.out
         assert "app/0.1: Hello World Debug!" in c.out
 
+    def test_cross_config_components(self, matrix_client_components):
+        # Release dependencies, but compiling app in Debug
+        c = matrix_client_components
+        c.run("new cmake_exe -d name=app -d version=0.1 -d requires=matrix/1.0")
+        app_cpp = textwrap.dedent("""
+            #include "app.h"
+            #include "module.h"
+            void app(){
+               module();
+            }""")
+        c.save({"src/app.cpp": app_cpp,
+                "src/main.cpp": gen_function_cpp(name="main", includes=["app"], calls=["app"])})
+
+        c.run(f"install . -s &:build_type=Debug -c tools.cmake.cmakedeps:new={new_value}")
+        # With modern CMake > 3.26 not necessary set(CMAKE_MAP_IMPORTED_CONFIG_DEBUG Release)
+        cmake = textwrap.dedent("""
+            cmake_minimum_required(VERSION 3.27)
+            project(app CXX)
+            # set(CMAKE_MAP_IMPORTED_CONFIG_DEBUG Release)
+            find_package(matrix CONFIG REQUIRED)
+
+            add_executable(app src/app.cpp src/main.cpp)
+            target_link_libraries(app PRIVATE matrix::matrix)
+            """)
+        c.save({"CMakeLists.txt": cmake})
+
+        preset = "conan-default" if platform.system() == "Windows" else "conan-debug"
+        c.run_command(f"cmake --preset {preset}")
+        c.run_command("cmake --build --preset conan-debug")
+
+        c.run_command(os.path.join("build", "Debug", "app"))
+        assert "main: Debug!" in c.out
+        assert "module: Release!" in c.out
+        assert "vector: Release!" in c.out
+
     @pytest.mark.skipif(platform.system() == "Windows", reason="This doesn't work in MSVC")
     def test_cross_config_implicit(self, matrix_client):
         # Release dependencies, but compiling app in Debug, without specifying it
@@ -1160,9 +1199,9 @@ class TestConfigs:
 
         # With modern CMake > 3.26 not necessary set(CMAKE_MAP_IMPORTED_CONFIG_DEBUG Release)
         cmake = textwrap.dedent("""
-            cmake_minimum_required(VERSION 3.15)
+            cmake_minimum_required(VERSION 3.27)
             project(app CXX)
-            set(CMAKE_MAP_IMPORTED_CONFIG_DEBUG Release)
+            # set(CMAKE_MAP_IMPORTED_CONFIG_DEBUG Release)
             find_package(matrix CONFIG REQUIRED)
 
             add_executable(app src/app.cpp src/main.cpp)
