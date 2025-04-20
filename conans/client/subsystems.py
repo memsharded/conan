@@ -24,7 +24,7 @@ import platform
 import re
 
 from conan.tools.build import cmd_args_to_string
-from conans.errors import ConanException
+from conan.errors import ConanException
 
 WINDOWS = "windows"
 MSYS2 = 'msys2'
@@ -43,7 +43,6 @@ def command_env_wrapper(conanfile, command, envfiles, envfiles_folder, scope="bu
 
     active = conanfile.conf.get("tools.microsoft.bash:active", check_type=bool)
     subsystem = conanfile.conf.get("tools.microsoft.bash:subsystem")
-
     if platform.system() == "Windows" and (
             (conanfile.win_bash and scope == "build") or
             (conanfile.win_bash_run and scope == "run")):
@@ -51,11 +50,11 @@ def command_env_wrapper(conanfile, command, envfiles, envfiles_folder, scope="bu
             raise ConanException("win_bash/win_bash_run defined but no "
                                  "tools.microsoft.bash:subsystem")
         if active:
-            wrapped_cmd = environment_wrap_command(envfiles, envfiles_folder, command)
+            wrapped_cmd = environment_wrap_command(conanfile, envfiles, envfiles_folder, command)
         else:
             wrapped_cmd = _windows_bash_wrapper(conanfile, command, envfiles, envfiles_folder)
     else:
-        wrapped_cmd = environment_wrap_command(envfiles, envfiles_folder, command)
+        wrapped_cmd = environment_wrap_command(conanfile, envfiles, envfiles_folder, command)
     return wrapped_cmd
 
 
@@ -72,6 +71,7 @@ def _windows_bash_wrapper(conanfile, command, env, envfiles_folder):
     if not shell_path:
         raise ConanException("The config 'tools.microsoft.bash:path' is "
                              "needed to run commands in a Windows subsystem")
+    shell_path = shell_path.replace("\\", "/")  # Should work in all terminals
     env = env or []
     if subsystem == MSYS2:
         # Configure MSYS2 to inherith the PATH
@@ -82,6 +82,7 @@ def _windows_bash_wrapper(conanfile, command, env, envfiles_folder):
         # - CHERE_INVOKING is necessary to keep the CWD and not change automatically to the user home
         msys2_mode_env.define("MSYSTEM", _msystem)
         msys2_mode_env.define("MSYS2_PATH_TYPE", "inherit")
+        msys2_mode_env.unset("ORIGINAL_PATH")
         # So --login do not change automatically to the user home
         msys2_mode_env.define("CHERE_INVOKING", "1")
         path = os.path.join(conanfile.generators_folder, "msys2_mode.bat")
@@ -92,12 +93,12 @@ def _windows_bash_wrapper(conanfile, command, env, envfiles_folder):
         env.append(path)
 
     wrapped_shell = '"%s"' % shell_path if " " in shell_path else shell_path
-    wrapped_shell = environment_wrap_command(env, envfiles_folder, wrapped_shell,
+    wrapped_shell = environment_wrap_command(conanfile, env, envfiles_folder, wrapped_shell,
                                              accepted_extensions=("bat", "ps1"))
 
     # Wrapping the inside_command enable to prioritize our environment, otherwise /usr/bin go
     # first and there could be commands that we want to skip
-    wrapped_user_cmd = environment_wrap_command(env, envfiles_folder, command,
+    wrapped_user_cmd = environment_wrap_command(conanfile, env, envfiles_folder, command,
                                                 accepted_extensions=("sh", ))
     wrapped_user_cmd = _escape_windows_cmd(wrapped_user_cmd)
     # according to https://www.msys2.org/wiki/Launchers/, it is necessary to use --login shell
@@ -126,6 +127,7 @@ def deduce_subsystem(conanfile, scope):
     - Aggregation of envfiles: to map each aggregated path to the subsystem
     - unix_path: util for recipes
     """
+    scope = "build" if scope is None else scope  # let's assume build context if scope=None
     if scope.startswith("build"):
         the_os = conanfile.settings_build.get_safe("os")
         if the_os is None:

@@ -3,8 +3,8 @@ import os
 from conan.api.output import ConanOutput
 from conan.cli import make_abs_path
 from conans.client.graph.graph import Overrides
-from conans.errors import ConanException
-from conans.model.graph_lock import Lockfile, LOCKFILE
+from conan.errors import ConanException
+from conan.internal.model.lockfile import Lockfile, LOCKFILE
 
 
 class LockfileAPI:
@@ -64,11 +64,13 @@ class LockfileAPI:
         else:
             python_requires = []
         python_requires = python_requires + ([ref] if is_python_require else [])
-        lockfile = self.add_lockfile(lockfile,
+        new_lock = self.add_lockfile(lockfile,
                                      requires=[ref] if is_require else None,
                                      python_requires=python_requires,
                                      build_requires=[ref] if is_build_require else None)
-        return lockfile
+        if lockfile is None:  # If there was no lockfile, it is a partial one to lock export
+            new_lock.partial = True
+        return new_lock
 
     @staticmethod
     def update_lockfile(lockfile, graph, lock_packages=False, clean=False):
@@ -79,13 +81,29 @@ class LockfileAPI:
         return lockfile
 
     @staticmethod
-    def add_lockfile(lockfile=None, requires=None, build_requires=None, python_requires=None):
+    def merge_lockfiles(lockfiles):
+        result = Lockfile()
+        for lockfile in lockfiles:
+            lockfile = make_abs_path(lockfile)
+            graph_lock = Lockfile.load(lockfile)
+            result.merge(graph_lock)
+        return result
+
+    @staticmethod
+    def add_lockfile(lockfile=None, requires=None, build_requires=None, python_requires=None,
+                     config_requires=None):
         if lockfile is None:
             lockfile = Lockfile()  # create a new lockfile
-            lockfile.partial = True
 
         lockfile.add(requires=requires, build_requires=build_requires,
-                     python_requires=python_requires)
+                     python_requires=python_requires, config_requires=config_requires)
+        return lockfile
+
+    @staticmethod
+    def remove_lockfile(lockfile, requires=None, build_requires=None, python_requires=None,
+                        config_requires=None):
+        lockfile.remove(requires=requires, build_requires=build_requires,
+                        python_requires=python_requires, config_requires=config_requires)
         return lockfile
 
     @staticmethod

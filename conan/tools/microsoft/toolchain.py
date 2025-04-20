@@ -7,7 +7,8 @@ from jinja2 import Template
 from conan.internal import check_duplicated_generator
 from conan.tools.build import build_jobs
 from conan.tools.intel.intel_cc import IntelCC
-from conan.tools.microsoft.visual import VCVars, msvs_toolset
+from conan.tools.microsoft.visual import VCVars, msvs_toolset, msvc_runtime_flag, \
+    msvc_platform_from_arch
 from conan.errors import ConanException
 from conans.util.files import save, load
 
@@ -27,6 +28,7 @@ class MSBuildToolchain(object):
               <PreprocessorDefinitions>{{ defines }}%(PreprocessorDefinitions)</PreprocessorDefinitions>
               <AdditionalOptions>{{ compiler_flags }} %(AdditionalOptions)</AdditionalOptions>
               <RuntimeLibrary>{{ runtime_library }}</RuntimeLibrary>
+              {% if cstd %}<LanguageStandard_C>{{ cstd }}</LanguageStandard_C>{% endif %}
               <LanguageStandard>{{ cppstd }}</LanguageStandard>{{ parallel }}{{ compile_options }}
             </ClCompile>
             <Link>
@@ -34,10 +36,12 @@ class MSBuildToolchain(object):
             </Link>
             <ResourceCompile>
               <PreprocessorDefinitions>{{ defines }}%(PreprocessorDefinitions)</PreprocessorDefinitions>
-              <AdditionalOptions>{{ compiler_flags }} %(AdditionalOptions)</AdditionalOptions>
             </ResourceCompile>
           </ItemDefinitionGroup>
           <PropertyGroup Label="Configuration">
+            {% if winsdk_version %}
+            <WindowsTargetPlatformVersion>{{ winsdk_version}}</WindowsTargetPlatformVersion>
+            {% endif %}
             <PlatformToolset>{{ toolset }}</PlatformToolset>
             {% for k, v in properties.items() %}
             <{{k}}>{{ v }}</{{k}}>
@@ -64,22 +68,19 @@ class MSBuildToolchain(object):
         #: The build type. By default, the ``conanfile.settings.build_type`` value
         self.configuration = conanfile.settings.build_type
         #: The runtime flag. By default, it'll be based on the `compiler.runtime` setting.
-        self.runtime_library = self._runtime_library(conanfile.settings)
+        self.runtime_library = self._runtime_library()
         #: cppstd value. By default, ``compiler.cppstd`` one.
         self.cppstd = conanfile.settings.get_safe("compiler.cppstd")
+        self.cstd = conanfile.settings.get_safe("compiler.cstd")
         #: VS IDE Toolset, e.g., ``"v140"``. If ``compiler=msvc``, you can use ``compiler.toolset``
         #: setting, else, it'll be based on ``msvc`` version.
         self.toolset = msvs_toolset(conanfile)
         self.properties = {}
 
     def _name_condition(self, settings):
+        platform = msvc_platform_from_arch(settings.get_safe("arch"))
         props = [("Configuration", self.configuration),
-                 # TODO: refactor, put in common with MSBuildDeps. Beware this is != msbuild_arch
-                 #  because of Win32
-                 ("Platform", {'x86': 'Win32',
-                               'x86_64': 'x64',
-                               'armv7': 'ARM',
-                               'armv8': 'ARM64'}.get(settings.get_safe("arch")))]
+                 ("Platform", platform)]
 
         name = "".join("_%s" % v for _, v in props if v is not None)
         condition = " And ".join("'$(%s)' == '%s'" % (k, v) for k, v in props if v is not None)
@@ -103,24 +104,13 @@ class MSBuildToolchain(object):
         else:
             VCVars(self._conanfile).generate()
 
-    @staticmethod
-    def _runtime_library(settings):
-        compiler = settings.compiler
-        runtime = settings.get_safe("compiler.runtime")
-        if compiler == "msvc" or compiler == "intel-cc":
-            build_type = settings.get_safe("build_type")
-            if build_type != "Debug":
-                runtime_library = {"static": "MultiThreaded",
-                                   "dynamic": "MultiThreadedDLL"}.get(runtime, "")
-            else:
-                runtime_library = {"static": "MultiThreadedDebug",
-                                   "dynamic": "MultiThreadedDebugDLL"}.get(runtime, "")
-        else:
-            runtime_library = {"MT": "MultiThreaded",
-                               "MTd": "MultiThreadedDebug",
-                               "MD": "MultiThreadedDLL",
-                               "MDd": "MultiThreadedDebugDLL"}.get(runtime, "")
-        return runtime_library
+    def _runtime_library(self):
+        return {
+            "MT": "MultiThreaded",
+            "MTd": "MultiThreadedDebug",
+            "MD": "MultiThreadedDLL",
+            "MDd": "MultiThreadedDebugDLL",
+        }.get(msvc_runtime_flag(self._conanfile), "")
 
     @property
     def context_config_toolchain(self):
@@ -137,6 +127,7 @@ class MSBuildToolchain(object):
         self.ldflags.extend(sharedlinkflags + exelinkflags)
 
         cppstd = "stdcpp%s" % self.cppstd if self.cppstd else ""
+        cstd = f"stdc{self.cstd}" if self.cstd else ""
         runtime_library = self.runtime_library
         toolset = self.toolset or ""
         compile_options = self._conanfile.conf.get("tools.microsoft.msbuildtoolchain:compile_options",
@@ -150,16 +141,22 @@ class MSBuildToolchain(object):
                  "\n      <ProcessorNumber>{}</ProcessorNumber>".format(njobs)])
         compile_options = "".join("\n      <{k}>{v}</{k}>".format(k=k, v=v)
                                   for k, v in self.compile_options.items())
+
+        winsdk_version = self._conanfile.conf.get("tools.microsoft:winsdk_version", check_type=str)
+        winsdk_version = winsdk_version or self._conanfile.settings.get_safe("os.version")
+
         return {
             'defines': defines,
             'compiler_flags': " ".join(self.cxxflags + self.cflags),
             'linker_flags': " ".join(self.ldflags),
             "cppstd": cppstd,
+            "cstd": cstd,
             "runtime_library": runtime_library,
             "toolset": toolset,
             "compile_options": compile_options,
             "parallel": parallel,
             "properties": self.properties,
+            "winsdk_version": winsdk_version
         }
 
     def _write_config_toolchain(self, config_filename):

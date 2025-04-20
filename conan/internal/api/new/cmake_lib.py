@@ -5,6 +5,7 @@ from conan.tools.cmake import CMakeToolchain, CMake, cmake_layout, CMakeDeps
 class {{package_name}}Recipe(ConanFile):
     name = "{{name}}"
     version = "{{version}}"
+    package_type = "library"
 
     # Optional metadata
     license = "<Put the package license here>"
@@ -31,7 +32,18 @@ class {{package_name}}Recipe(ConanFile):
 
     def layout(self):
         cmake_layout(self)
-
+    {% if requires is defined %}
+    def requirements(self):
+        {% for require in requires -%}
+        self.requires("{{ require }}")
+        {% endfor %}
+    {%- endif %}
+    {%- if tool_requires is defined %}
+    def build_requirements(self):
+        {% for require in tool_requires -%}
+        self.tool_requires("{{ require }}")
+        {% endfor %}
+    {%- endif %}
     def generate(self):
         deps = CMakeDeps(self)
         deps.generate()
@@ -49,20 +61,6 @@ class {{package_name}}Recipe(ConanFile):
 
     def package_info(self):
         self.cpp_info.libs = ["{{name}}"]
-
-    {% if requires is defined -%}
-    def requirements(self):
-        {% for require in requires -%}
-        self.requires("{{ require }}")
-        {% endfor %}
-    {%- endif %}
-
-    {% if tool_requires is defined -%}
-    def build_requirements(self):
-        {% for require in tool_requires -%}
-        self.tool_requires("{{ require }}")
-        {% endfor %}
-    {%- endif %}
 
 '''
 
@@ -117,7 +115,7 @@ source_cpp = r"""#include <iostream>
 void {{package_name}}(){
     {% if requires is defined -%}
     {% for require in requires -%}
-    {{ as_name(require) }}();
+    {{ as_name(require).replace(".", "_") }}();
     {% endfor %}
     {%- endif %}
 
@@ -269,12 +267,6 @@ project(PackageTest CXX)
 
 find_package({{name}} CONFIG REQUIRED)
 
-{% if requires is defined -%}
-{% for require in requires -%}
-find_package({{as_name(require)}} CONFIG REQUIRED)
-{% endfor %}
-{%- endif %}
-
 add_executable(example src/example.cpp)
 target_link_libraries(example {{name}}::{{name}})
 """
@@ -286,7 +278,7 @@ test_main = """#include "{{name}}.h"
 
 int main() {
     {{package_name}}();
-    
+
     std::vector<std::string> vec;
     vec.push_back("test_package");
 

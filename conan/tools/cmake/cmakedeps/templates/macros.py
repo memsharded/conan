@@ -58,12 +58,14 @@ class MacrosTemplate(CMakeDepsFileTemplate):
                    set(_LIB_NAME CONAN_LIB::${package_name}_${_LIBRARY_NAME}${config_suffix})
 
                    if(is_host_windows AND library_type STREQUAL "SHARED")
+                     # Store and reset the variable, so it doesn't leak
+                     set(_OLD_CMAKE_FIND_LIBRARY_SUFFIXES ${CMAKE_FIND_LIBRARY_SUFFIXES})
                      set(CMAKE_FIND_LIBRARY_SUFFIXES .dll ${CMAKE_FIND_LIBRARY_SUFFIXES})
                      find_library(CONAN_SHARED_FOUND_LIBRARY NAMES ${_LIBRARY_NAME} PATHS ${package_bindir}
                                   NO_DEFAULT_PATH NO_CMAKE_FIND_ROOT_PATH)
+                     set(CMAKE_FIND_LIBRARY_SUFFIXES ${_OLD_CMAKE_FIND_LIBRARY_SUFFIXES})
                      if(NOT CONAN_SHARED_FOUND_LIBRARY)
-                       message(STATUS "Cannot locate shared library: ${_LIBRARY_NAME}")
-                       message(DEBUG "DLL library not found, creating UNKNOWN IMPORTED target")
+                       message(DEBUG "DLL library not found, creating UNKNOWN IMPORTED target, searched for: ${_LIBRARY_NAME}")
                        if(NOT TARGET ${_LIB_NAME})
                           add_library(${_LIB_NAME} UNKNOWN IMPORTED)
                        endif()
@@ -95,7 +97,7 @@ class MacrosTemplate(CMakeDepsFileTemplate):
 
            # Add the dependencies target for all the imported libraries
            foreach(_T ${_out_libraries_target})
-               set_property(TARGET ${_T} PROPERTY INTERFACE_LINK_LIBRARIES ${deps_target} APPEND)
+               set_property(TARGET ${_T} APPEND PROPERTY INTERFACE_LINK_LIBRARIES ${deps_target})
            endforeach()
 
            set(${out_libraries_target} ${_out_libraries_target} PARENT_SCOPE)

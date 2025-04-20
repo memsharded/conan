@@ -8,13 +8,15 @@ from jinja2 import Template
 
 from conan.internal import check_duplicated_generator
 from conan.errors import ConanException
-from conans.model.dependencies import get_transitive_requires
+from conan.internal.api.install.generators import relativize_path
+from conan.internal.model.dependencies import get_transitive_requires
+from conan.tools.microsoft.visual import msvc_platform_from_arch
 from conans.util.files import load, save
 
 VALID_LIB_EXTENSIONS = (".so", ".lib", ".a", ".dylib", ".bc")
 
 
-class MSBuildDeps(object):
+class MSBuildDeps:
     """
     MSBuildDeps class generator
     conandeps.props: unconditional import of all *direct* dependencies only
@@ -78,7 +80,6 @@ class MSBuildDeps(object):
             <ResourceCompile>
               <AdditionalIncludeDirectories>$(Conan{{name}}IncludeDirectories)%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
               <PreprocessorDefinitions>$(Conan{{name}}PreprocessorDefinitions)%(PreprocessorDefinitions)</PreprocessorDefinitions>
-              <AdditionalOptions>$(Conan{{name}}CompilerFlags) %(AdditionalOptions)</AdditionalOptions>
             </ResourceCompile>
           </ItemDefinitionGroup>
           {% else %}
@@ -94,15 +95,18 @@ class MSBuildDeps(object):
         :param conanfile: ``< ConanFile object >`` The current recipe object. Always use ``self``.
         """
         self._conanfile = conanfile
-        #: Defines the build type. By default, ``settings.build_type``.
+        #: Defines the build type. By default, the value of ``settings.build_type``.
         self.configuration = conanfile.settings.build_type
+        #: Defines the configuration key used to conditionally select which property sheet to
+        #: import (defaults to ``"Configuration"``).
+        self.configuration_key = "Configuration"
         # TODO: This platform is not exactly the same as ``msbuild_arch``, because it differs
         # in x86=>Win32
         #: Platform name, e.g., ``Win32`` if ``settings.arch == "x86"``.
-        self.platform = {'x86': 'Win32',
-                         'x86_64': 'x64',
-                         'armv7': 'ARM',
-                         'armv8': 'ARM64'}.get(str(conanfile.settings.arch))
+        self.platform = msvc_platform_from_arch(str(conanfile.settings.arch))
+        #: Defines the platform key used to conditionally select which property sheet to
+        #: import (defaults to ``"Platform"``).
+        self.platform_key = "Platform"
         ca_exclude = "tools.microsoft.msbuilddeps:exclude_code_analysis"
         #: List of packages names patterns to add Visual Studio ``CAExcludePath`` property
         #: to each match as part of its ``conan_[DEP]_[CONFIG].props``. By default, value given by
@@ -124,14 +128,14 @@ class MSBuildDeps(object):
             save(generator_file, content)
 
     def _config_filename(self):
-        props = [("Configuration", self.configuration),
-                 ("Platform", self.platform)]
-        name = "".join("_%s" % v for _, v in props)
+        props = [self.configuration,
+                 self.platform]
+        name = "".join("_%s" % v for v in props)
         return name.lower()
 
     def _condition(self):
-        props = [("Configuration", self.configuration),
-                 ("Platform", self.platform)]
+        props = [(self.configuration_key, self.configuration),
+                 (self.platform_key, self.platform)]
         condition = " And ".join("'$(%s)' == '%s'" % (k, v) for k, v in props)
         return condition
 
@@ -163,7 +167,7 @@ class MSBuildDeps(object):
             # https://docs.microsoft.com/en-us/visualstudio/msbuild/
             #                          how-to-escape-special-characters-in-msbuild
             # https://docs.microsoft.com/en-us/visualstudio/msbuild/msbuild-special-characters
-            return path.replace("\\", "/").lstrip("/")
+            return path.lstrip("/")
 
         def join_paths(paths):
             # TODO: ALmost copied from CMakeDeps TargetDataContext
@@ -179,6 +183,9 @@ class MSBuildDeps(object):
 
         root_folder = dep.recipe_folder if dep.package_folder is None else dep.package_folder
         root_folder = escape_path(root_folder)
+        # Make the root_folder relative to the generated conan_vars_xxx.props file
+        relative_root_folder = relativize_path(root_folder, self._conanfile,
+                                               "$(MSBuildThisFileDirectory)", normalize=False)
 
         bin_dirs = join_paths(cpp_info.bindirs)
         res_dirs = join_paths(cpp_info.resdirs)
@@ -206,7 +213,7 @@ class MSBuildDeps(object):
 
         fields = {
             'name': name,
-            'root_folder': root_folder,
+            'root_folder': relative_root_folder,
             'bin_dirs': bin_dirs,
             'res_dirs': res_dirs,
             'include_dirs': include_dirs,
@@ -316,6 +323,7 @@ class MSBuildDeps(object):
         condition = self._condition()
         dep_name = self._dep_name(dep, build)
         result = {}
+        pkg_deps = get_transitive_requires(self._conanfile, dep)  # only non-skipped dependencies
         if dep.cpp_info.has_components:
             pkg_aggregated_content = None
             for comp_name, comp_info in dep.cpp_info.components.items():
@@ -328,8 +336,14 @@ class MSBuildDeps(object):
                 public_deps = []  # To store the xml dependencies/file names
                 for required_pkg, required_comp in comp_info.parsed_requires():
                     if required_pkg is not None:  # Points to a component of a different package
-                        public_deps.append(required_pkg if required_pkg == required_comp
-                                           else "{}_{}".format(required_pkg, required_comp))
+                        try:
+                            required = pkg_deps[required_pkg]
+                        except KeyError:  # The transitive dep might have been skipped
+                            required = None
+                        if required:  # The transitive dep might have been skipped
+                            required_name = required.ref.name
+                            public_deps.append(required_name if required_pkg == required_comp
+                                               else "{}_{}".format(required_name, required_comp))
                     else:  # Points to a component of same package
                         public_deps.append("{}_{}".format(dep_name, required_comp))
                 public_deps = [self._get_valid_xml_format(d) for d in public_deps]
@@ -349,7 +363,6 @@ class MSBuildDeps(object):
             vars_filename = "conan_%s_vars%s.props" % (dep_name, conf_name)
             activate_filename = "conan_%s%s.props" % (dep_name, conf_name)
             pkg_filename = "conan_%s.props" % dep_name
-            pkg_deps = get_transitive_requires(self._conanfile, dep)
             public_deps = [self._dep_name(d, build) for d in pkg_deps.values()]
 
             result[vars_filename] = self._vars_props_file(require, dep, dep_name, cpp_info,

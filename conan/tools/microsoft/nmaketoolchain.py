@@ -38,12 +38,12 @@ class NMakeToolchain(object):
                 if value and not value.isnumeric():
                     value = f'\\"{value}\\"'
                 define = f"{macro}#{value}"
-            formated_defines.append(f"/D{define}")
+            formated_defines.append(f"/D\"{define}\"")
         return formated_defines
 
     @property
     def _cl(self):
-        bt_flags = build_type_flags(self._conanfile.settings)
+        bt_flags = build_type_flags(self._conanfile)
         bt_flags = bt_flags if bt_flags else []
 
         rt_flags = msvc_runtime_flag(self._conanfile)
@@ -54,7 +54,7 @@ class NMakeToolchain(object):
         cflags.extend(self.extra_cflags)
 
         cxxflags = []
-        cppstd = cppstd_flag(self._conanfile.settings)
+        cppstd = cppstd_flag(self._conanfile)
         if cppstd:
             cxxflags.append(cppstd)
         cxxflags.extend(self._conanfile.conf.get("tools.build:cxxflags", default=[], check_type=list))

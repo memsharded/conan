@@ -13,6 +13,8 @@ from conan.tools.apple import fix_apple_shared_install_name
 class {{package_name}}Conan(ConanFile):
     name = "{{name}}"
     version = "{{version}}"
+    package_type = "library"
+    win_bash = True
 
     # Optional metadata
     license = "<Put the package license here>"
@@ -91,6 +93,7 @@ from conan.tools.build import can_run
 class {{package_name}}TestConan(ConanFile):
     settings = "os", "compiler", "build_type", "arch"
     generators = "AutotoolsDeps", "AutotoolsToolchain"
+    win_bash = True
 
     def requirements(self):
         self.requires(self.tested_reference_str)

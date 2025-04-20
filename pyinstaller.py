@@ -15,21 +15,13 @@ not cross-build
 The resulting executable can be put in the system PATH of the running machine
 """
 
+import argparse
 import os
 import platform
 import shutil
-import subprocess
-from distutils import dir_util
+import sys
 
-from conans import __version__
-from conans.util.files import save
-
-
-def _install_pyinstaller(pyinstaller_path):
-    subprocess.call("pip install pyinstaller", shell=True)
-    # try to install pyinstaller if not installed
-    if not os.path.exists(pyinstaller_path):
-        os.mkdir(pyinstaller_path)
+from conan import __version__
 
 
 def _run_bin(pyinstaller_path):
@@ -91,11 +83,17 @@ VSVersionInfo(
     return template.format(version=version, version_tuple=version_tuple)
 
 
-def pyinstall(source_folder):
-    pyinstaller_path = os.path.join(os.getcwd(), 'pyinstaller')
-    _install_pyinstaller(pyinstaller_path)
-    command = "pyinstaller"  # "python pyinstaller.py"
+def pyinstall(source_folder, onefile=False):
+    try:
+        import PyInstaller.__main__  # noqa  Pyinstaller is not in the default requirements.txt
+    except ImportError:
+        print(f"ERROR: PyInstaller not found. Please install it with "
+              f"'python -m pip install pyinstaller'")
+        sys.exit(-1)
 
+    pyinstaller_path = os.path.join(os.getcwd(), 'pyinstaller')
+    if not os.path.exists(pyinstaller_path):
+        os.mkdir(pyinstaller_path)
     try:
         shutil.rmtree(os.path.join(pyinstaller_path))
     except Exception as e:
@@ -104,33 +102,57 @@ def pyinstall(source_folder):
     conan_path = os.path.join(source_folder, 'conans', 'conan.py')
     hidden = ("--hidden-import=glob "  # core stdlib
               "--hidden-import=pathlib "
-              "--hidden-import=distutils.dir_util "
               # Modules that can be imported in ConanFile conan.tools and errors
               "--collect-submodules=conan.cli.commands "
               "--hidden-import=conan.errors "
-              "--hidden-import=conan.tools.microsoft "
-              "--hidden-import=conan.tools.gnu --hidden-import=conan.tools.cmake "
-              "--hidden-import=conan.tools.meson --hidden-import=conan.tools.apple "
-              "--hidden-import=conan.tools.build --hidden-import=conan.tools.env "
+              "--hidden-import=conan.tools.android "
+              "--hidden-import=conan.tools.apple "
+              "--hidden-import=conan.tools.build "
+              "--hidden-import=conan.tools.cmake "
+              "--hidden-import=conan.tools.env "
               "--hidden-import=conan.tools.files "
-              "--hidden-import=conan.tools.google --hidden-import=conan.tools.intel "
-              "--hidden-import=conan.tools.layout --hidden-import=conan.tools.premake "
-              "--hidden-import=conan.tools.qbs --hidden-import=conan.tools.scm "
-              "--hidden-import=conan.tools.system --hidden-import=conan.tools.system.package_manager")
+              "--hidden-import=conan.tools.gnu "
+              "--hidden-import=conan.tools.google "
+              "--hidden-import=conan.tools.intel "
+              "--hidden-import=conan.tools.layout "
+              "--hidden-import=conan.tools.meson "
+              "--hidden-import=conan.tools.microsoft "
+              "--hidden-import=conan.tools.premake "
+              "--hidden-import=conan.tools.qbs "
+              "--hidden-import=conan.tools.ros "
+              "--hidden-import=conan.tools.sbom "
+              "--hidden-import=conan.tools.scm "
+              "--hidden-import=conan.tools.scons "
+              "--hidden-import=conan.tools.system "
+              "--hidden-import=conan.tools.system.package_manager")
+
+    if not os.path.exists(pyinstaller_path):
+        os.mkdir(pyinstaller_path)
+
     if platform.system() != "Windows":
         hidden += " --hidden-import=setuptools.msvc"
         win_ver = ""
     else:
         win_ver_file = os.path.join(pyinstaller_path, 'windows-version-file')
         content = _windows_version_file(__version__)
-        save(win_ver_file, content)
-        win_ver = "--version-file \"%s\"" % win_ver_file
+        with open(win_ver_file, 'w') as file:
+            file.write(content)
+        win_ver = ["--version-file", win_ver_file]
 
-    if not os.path.exists(pyinstaller_path):
-        os.mkdir(pyinstaller_path)
-    subprocess.call('%s -y -p "%s" --console "%s" %s %s'
-                    % (command, source_folder, conan_path, hidden, win_ver),
-                    cwd=pyinstaller_path, shell=True)
+    if onefile:
+        distpath = os.path.join(pyinstaller_path, "dist", "conan")
+    else:
+        distpath = os.path.join(pyinstaller_path, "dist")
+
+    command_args = [conan_path, "--noconfirm", f"--paths={source_folder}",
+                    "--console", f"--distpath={distpath}"]
+    command_args.extend(hidden.split(" "))
+    if win_ver:
+        command_args.extend(win_ver)
+    if onefile:
+        command_args.append("--onefile")
+
+    PyInstaller.__main__.run(command_args)
 
     _run_bin(pyinstaller_path)
 
@@ -138,8 +160,13 @@ def pyinstall(source_folder):
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--onefile', action='store_true')
+    parser.set_defaults(onefile=False)
+    args = parser.parse_args()
+
     src_folder = os.path.abspath(os.path.dirname(os.path.abspath(__file__)))
-    output_folder = pyinstall(src_folder)
+    output_folder = pyinstall(src_folder, args.onefile)
     print("\n**************Conan binaries created!******************\n"
           "\nAppend this folder to your system PATH: '%s'\n"
           "Feel free to move the whole folder to another location." % output_folder)

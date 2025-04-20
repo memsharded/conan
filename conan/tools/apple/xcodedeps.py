@@ -6,7 +6,7 @@ from jinja2 import Template
 
 from conan.internal import check_duplicated_generator
 from conan.errors import ConanException
-from conans.model.dependencies import get_transitive_requires
+from conan.internal.model.dependencies import get_transitive_requires
 from conans.util.files import load, save
 from conan.tools.apple.apple import _to_apple_arch
 
@@ -323,10 +323,7 @@ class XcodeDeps(object):
 
             result["conan_{}.xcconfig".format(dep_name)] = self._pkg_xconfig_file(include_components_names)
 
-        # Include transitive requires
         all_file_content = ""
-        for require, dep in requires:
-            all_file_content = self._all_xconfig_file(get_transitive_requires(self._conanfile, dep), all_file_content)
 
         # Include direct requires
         direct_deps = self._conanfile.dependencies.filter({"direct": True, "build": False, "skip": False})

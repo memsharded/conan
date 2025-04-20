@@ -1,20 +1,22 @@
+import io
+import os
 import time
-from copy import copy
 
-from conan.api.output import ConanOutput
+from conan.api.output import ConanOutput, TimedOutput
 from conans.client.rest import response_to_str
-from conans.errors import AuthenticationException, ConanException, \
-    NotFoundException, ForbiddenException, RequestErrorException, InternalErrorException
+from conan.internal.errors import InternalErrorException, RequestErrorException, AuthenticationException, \
+    ForbiddenException, NotFoundException
+from conan.errors import ConanException
 from conans.util.files import sha1sum
 
 
 class FileUploader(object):
 
-    def __init__(self, requester, verify, config):
-        self._output = ConanOutput()
+    def __init__(self, requester, verify, config, source_credentials=None):
         self._requester = requester
         self._config = config
         self._verify_ssl = verify
+        self._source_credentials = source_credentials
 
     @staticmethod
     def _handle_400_response(response, auth):
@@ -25,7 +27,7 @@ class FileUploader(object):
             raise AuthenticationException(response_to_str(response))
 
         if response.status_code == 403:
-            if auth is None or auth.token is None:
+            if auth is None or auth.bearer is None:
                 raise AuthenticationException(response_to_str(response))
             raise ForbiddenException(response_to_str(response))
 
@@ -37,7 +39,7 @@ class FileUploader(object):
         if headers:
             dedup_headers.update(headers)
         response = self._requester.put(url, data="", verify=self._verify_ssl, headers=dedup_headers,
-                                       auth=auth)
+                                       auth=auth, source_credentials=self._source_credentials)
         if response.status_code == 500:
             raise InternalErrorException(response_to_str(response))
 
@@ -47,19 +49,19 @@ class FileUploader(object):
             return response
 
     def exists(self, url, auth):
-        response = self._requester.head(url, verify=self._verify_ssl, auth=auth)
-        return response
+        response = self._requester.head(url, verify=self._verify_ssl, auth=auth,
+                                        source_credentials=self._source_credentials)
+        return bool(response.ok)
 
     def upload(self, url, abs_path, auth=None, dedup=False, retry=None, retry_wait=None,
-               headers=None):
+               ref=None):
         retry = retry if retry is not None else self._config.get("core.upload:retry", default=1,
                                                                  check_type=int)
         retry_wait = retry_wait if retry_wait is not None else \
             self._config.get("core.upload:retry_wait", default=5, check_type=int)
 
         # Send always the header with the Sha1
-        headers = copy(headers) or {}
-        headers["X-Checksum-Sha1"] = sha1sum(abs_path)
+        headers = {"X-Checksum-Sha1": sha1sum(abs_path)}
         if dedup:
             response = self._dedup(url, headers, auth)
             if response:
@@ -67,7 +69,7 @@ class FileUploader(object):
 
         for counter in range(retry + 1):
             try:
-                return self._upload_file(url, abs_path, headers, auth)
+                return self._upload_file(url, abs_path, headers, auth, ref)
             except (NotFoundException, ForbiddenException, AuthenticationException,
                     RequestErrorException):
                 raise
@@ -75,16 +77,16 @@ class FileUploader(object):
                 if counter == retry:
                     raise
                 else:
-                    if self._output:
-                        self._output.error(exc)
-                        self._output.info("Waiting %d seconds to retry..." % retry_wait)
+                    ConanOutput().warning(exc, warn_tag="network")
+                    ConanOutput().info("Waiting %d seconds to retry..." % retry_wait)
                     time.sleep(retry_wait)
 
-    def _upload_file(self, url, abs_path,  headers, auth):
-        with open(abs_path, mode='rb') as file_handler:
+    def _upload_file(self, url, abs_path, headers, auth, ref):
+        with FileProgress(abs_path, mode='rb', msg=f"{ref}: Uploading") as file_handler:
             try:
                 response = self._requester.put(url, data=file_handler, verify=self._verify_ssl,
-                                               headers=headers, auth=auth)
+                                               headers=headers, auth=auth,
+                                               source_credentials=self._source_credentials)
                 self._handle_400_response(response, auth)
                 response.raise_for_status()  # Raise HTTPError for bad http response status
                 return response
@@ -92,3 +94,22 @@ class FileUploader(object):
                 raise
             except Exception as exc:
                 raise ConanException(exc)
+
+
+class FileProgress(io.FileIO):
+    def __init__(self, path: str, msg: str = "Uploading", interval: float = 10, *args, **kwargs):
+        super().__init__(path, *args, **kwargs)
+        self._size = os.path.getsize(path)
+        self._filename = os.path.basename(path)
+        # Report only on big sizes (>100MB)
+        self._reporter = TimedOutput(interval=interval) if self._size > 100_000_000 else None
+        self._bytes_read = 0
+        self.msg = msg
+
+    def read(self, size: int = -1) -> bytes:
+        block = super().read(size)
+        self._bytes_read += len(block)
+        if self._reporter:
+            current_percentage = int(self._bytes_read * 100.0 / self._size) if self._size != 0 else 0
+            self._reporter.info(f"{self.msg} {self._filename}: {current_percentage}%")
+        return block

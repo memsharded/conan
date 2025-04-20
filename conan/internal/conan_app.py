@@ -1,21 +1,20 @@
 import os
 
-from conan.api.output import ConanOutput
-from conans.client.cache.cache import ClientCache
+from conan.internal.api.local.editable import EditablePackages
+from conan.internal.cache.cache import PkgCache
+from conan.internal.cache.home_paths import HomePaths
+from conan.internal.model.conf import ConfDefinition
 from conans.client.graph.proxy import ConanProxy
 from conans.client.graph.python_requires import PyRequireLoader
 from conans.client.graph.range_resolver import RangeResolver
-from conans.client.hook_manager import HookManager
 from conans.client.loader import ConanFileLoader, load_python_file
 from conans.client.remote_manager import RemoteManager
 from conans.client.rest.auth_manager import ConanApiAuthManager
-from conans.client.rest.conan_requester import ConanRequester
-from conans.client.rest.rest_client import RestApiClientFactory
+from conan.internal.api.remotes.localdb import LocalDB
 
 
 class CmdWrapper:
-    def __init__(self, cache):
-        wrapper = os.path.join(cache.cache_folder, "extensions", "plugins", "cmd_wrapper.py")
+    def __init__(self, wrapper):
         if os.path.isfile(wrapper):
             mod, _ = load_python_file(wrapper)
             self._wrapper = mod.cmd_wrapper
@@ -29,35 +28,66 @@ class CmdWrapper:
 
 
 class ConanFileHelpers:
-    def __init__(self, requester, cmd_wrapper, global_conf, cache):
+    def __init__(self, requester, cmd_wrapper, global_conf, cache, home_folder):
         self.requester = requester
         self.cmd_wrapper = cmd_wrapper
         self.global_conf = global_conf
         self.cache = cache
+        self.home_folder = home_folder
 
 
-class ConanApp(object):
-    def __init__(self, cache_folder):
-
+class ConanBasicApp:
+    def __init__(self, conan_api):
+        """ Needs:
+        - Global configuration
+        - Cache home folder
+        """
+        global_conf = conan_api.config.global_conf
+        self.global_conf = global_conf
+        self.conan_api = conan_api
+        cache_folder = conan_api.home_folder
         self.cache_folder = cache_folder
-        self.cache = ClientCache(self.cache_folder)
-
-        self.hook_manager = HookManager(self.cache.hooks_path)
-        # Wraps an http_requester to inject proxies, certs, etc
-        global_conf = self.cache.new_config
-        ConanOutput.define_silence_warnings(global_conf.get("core:skip_warnings", check_type=list))
-        self.requester = ConanRequester(global_conf, cache_folder)
-        # To handle remote connections
-        rest_client_factory = RestApiClientFactory(self.requester, global_conf)
+        self.cache = PkgCache(self.cache_folder, global_conf)
         # Wraps RestApiClient to add authentication support (same interface)
-        auth_manager = ConanApiAuthManager(rest_client_factory, self.cache)
+        localdb = LocalDB(cache_folder)
+        auth_manager = ConanApiAuthManager(conan_api.remotes.requester, cache_folder, localdb, global_conf)
         # Handle remote connections
-        self.remote_manager = RemoteManager(self.cache, auth_manager)
+        self.remote_manager = RemoteManager(self.cache, auth_manager, cache_folder)
+        global_editables = conan_api.local.editable_packages
+        ws_editables = conan_api.workspace.editable_packages
+        self.editable_packages = global_editables.update_copy(ws_editables)
 
-        self.proxy = ConanProxy(self)
-        self.range_resolver = RangeResolver(self)
 
-        self.pyreq_loader = PyRequireLoader(self.proxy, self.range_resolver)
-        cmd_wrap = CmdWrapper(self.cache)
-        conanfile_helpers = ConanFileHelpers(self.requester, cmd_wrap, global_conf, self.cache)
+class ConanApp(ConanBasicApp):
+    def __init__(self, conan_api):
+        """ Needs:
+        - LocalAPI to read editable packages
+        """
+        super().__init__(conan_api)
+        self.proxy = ConanProxy(self, self.editable_packages)
+        self.range_resolver = RangeResolver(self, self.global_conf, self.editable_packages)
+
+        self.pyreq_loader = PyRequireLoader(self, self.global_conf)
+        cmd_wrap = CmdWrapper(HomePaths(self.cache_folder).wrapper_path)
+        conanfile_helpers = ConanFileHelpers(conan_api.remotes.requester, cmd_wrap, self.global_conf,
+                                             self.cache, self.cache_folder)
         self.loader = ConanFileLoader(self.pyreq_loader, conanfile_helpers)
+
+
+class LocalRecipesIndexApp:
+    """
+    Simplified one, without full API, for the LocalRecipesIndex. Only publicly used fields are:
+    - cache
+    - loader (for the export phase of local-recipes-index)
+    The others are internally use by other collaborators
+    """
+    def __init__(self, cache_folder):
+        self.global_conf = ConfDefinition()
+        self.cache = PkgCache(cache_folder, self.global_conf)
+        self.remote_manager = RemoteManager(self.cache, auth_manager=None, home_folder=cache_folder)
+        editable_packages = EditablePackages()
+        self.proxy = ConanProxy(self, editable_packages)
+        self.range_resolver = RangeResolver(self, self.global_conf, editable_packages)
+        pyreq_loader = PyRequireLoader(self, self.global_conf)
+        helpers = ConanFileHelpers(None, CmdWrapper(""), self.global_conf, self.cache, cache_folder)
+        self.loader = ConanFileLoader(pyreq_loader, helpers)

@@ -3,10 +3,11 @@ import textwrap
 from collections import OrderedDict
 from contextlib import contextmanager
 
-from conans.client.generators import relativize_generated_file
+from conan.api.output import ConanOutput
+from conan.internal.api.install.generators import relativize_paths
 from conans.client.subsystems import deduce_subsystem, WINDOWS, subsystem_path
 from conan.errors import ConanException
-from conans.model.recipe_ref import ref_matches
+from conan.internal.model.recipe_ref import ref_matches
 from conans.util.files import save
 
 
@@ -14,7 +15,7 @@ class _EnvVarPlaceHolder:
     pass
 
 
-def environment_wrap_command(env_filenames, env_folder, cmd, subsystem=None,
+def environment_wrap_command(conanfile, env_filenames, env_folder, cmd, subsystem=None,
                              accepted_extensions=None):
     if not env_filenames:
         return cmd
@@ -51,22 +52,24 @@ def environment_wrap_command(env_filenames, env_folder, cmd, subsystem=None,
         raise ConanException("Cannot wrap command with different envs,"
                              "{} - {}".format(bats+ps1s, shs))
 
+    powershell = conanfile.conf.get("tools.env.virtualenv:powershell") or "powershell.exe"
+    powershell = "powershell.exe" if powershell is True else powershell
+
     if bats:
         launchers = " && ".join('"{}"'.format(b) for b in bats)
         if ps1s:
-            ps1_launchers = " ; ".join('"&\'{}\'"'.format(f) for f in ps1s)
-            cmd = cmd.replace('"', "'")
-            return '{} && powershell.exe {} ; cmd /c {}'.format(launchers, ps1_launchers, cmd)
+            ps1_launchers = f'{powershell} -Command "' + " ; ".join('&\'{}\''.format(f) for f in ps1s) + '"'
+            cmd = cmd.replace('"', r'\"')
+            return '{} && {} ; cmd /c "{}"'.format(launchers, ps1_launchers, cmd)
         else:
             return '{} && {}'.format(launchers, cmd)
     elif shs:
         launchers = " && ".join('. "{}"'.format(f) for f in shs)
         return '{} && {}'.format(launchers, cmd)
     elif ps1s:
-        # TODO: at the moment it only works with path without spaces
-        launchers = " ; ".join('"&\'{}\'"'.format(f) for f in ps1s)
-        cmd = cmd.replace('"', "'")
-        return 'powershell.exe {} ; cmd /c {}'.format(launchers, cmd)
+        ps1_launchers = f'{powershell} -Command "' + " ; ".join('&\'{}\''.format(f) for f in ps1s) + '"'
+        cmd = cmd.replace('"', r'\"')
+        return '{} ; cmd /c "{}"'.format(ps1_launchers, cmd)
     else:
         return cmd
 
@@ -81,18 +84,19 @@ class _EnvValue:
     def dumps(self):
         result = []
         path = "(path)" if self._path else ""
+        sep = f"(sep={self._sep})" if self._sep != " " and not self._path else ""
         if not self._values:  # Empty means unset
             result.append("{}=!".format(self._name))
         elif _EnvVarPlaceHolder in self._values:
             index = self._values.index(_EnvVarPlaceHolder)
-            for v in self._values[:index]:
-                result.append("{}=+{}{}".format(self._name, path, v))
+            for v in reversed(self._values[:index]):  # Reverse to prepend
+                result.append("{}=+{}{}{}".format(self._name, path, sep, v))
             for v in self._values[index+1:]:
-                result.append("{}+={}{}".format(self._name, path, v))
+                result.append("{}+={}{}{}".format(self._name, path, sep, v))
         else:
             append = ""
             for v in self._values:
-                result.append("{}{}={}{}".format(self._name, append, path, v))
+                result.append("{}{}={}{}{}".format(self._name, append, path, sep, v))
                 append = "+"
         return "\n".join(result)
 
@@ -135,12 +139,14 @@ class _EnvValue:
             new_value[index:index + 1] = other._values  # replace the placeholder
             self._values = new_value
 
-    def get_str(self, placeholder, subsystem, pathsep):
+    def get_str(self, placeholder, subsystem, pathsep, root_path=None, script_path=None):
         """
         :param subsystem:
         :param placeholder: a OS dependant string pattern of the previous env-var value like
         $PATH, %PATH%, et
         :param pathsep: The path separator, typically ; or :
+        :param root_path: To do a relativize of paths, the base root path to be replaced
+        :param script_path: the replacement instead of the script path
         :return: a string representation of the env-var value, including the $NAME-like placeholder
         """
         values = []
@@ -151,6 +157,13 @@ class _EnvValue:
             else:
                 if self._path:
                     v = subsystem_path(subsystem, v)
+                    if root_path is not None:
+                        if v.startswith(root_path):  # relativize
+                            v = v.replace(root_path, script_path, 1)
+                        elif os.sep == "\\":  # Just in case user specified C:/path/to/somewhere
+                            r = root_path.replace("\\", "/")
+                            if v.startswith(r):
+                                v = v.replace(r, script_path.replace("\\", "/"))
                 values.append(v)
         if self._path:
             return pathsep.join(values)
@@ -169,6 +182,9 @@ class _EnvValue:
             if v is _EnvVarPlaceHolder:
                 continue
             rel_path = os.path.relpath(v, package_folder)
+            if rel_path.startswith(".."):
+                # If it is pointing to a folder outside of the package, then do not relocate
+                continue
             self._values[i] = os.path.join(deploy_folder, rel_path)
 
     def set_relative_base_folder(self, folder):
@@ -303,10 +319,9 @@ class Environment:
 
     def vars(self, conanfile, scope="build"):
         """
-        Return an EnvVars object from the current Environment object
         :param conanfile: Instance of a conanfile, usually ``self`` in a recipe
         :param scope: Determine the scope of the declared variables.
-        :return:
+        :return: An EnvVars object from the current Environment object
         """
         return EnvVars(conanfile, self._values, scope)
 
@@ -326,7 +341,7 @@ class EnvVars:
 
     """
     def __init__(self, conanfile, values, scope):
-        self._values = values # {var_name: _EnvValue}, just a reference to the Environment
+        self._values = values  # {var_name: _EnvValue}, just a reference to the Environment
         self._conanfile = conanfile
         self._scope = scope
         self._subsystem = deduce_subsystem(conanfile, scope)
@@ -415,15 +430,17 @@ class EnvVars:
             {deactivate}
             """).format(deactivate=deactivate if generate_deactivate else "")
         result = [capture]
+        abs_base_path, new_path = relativize_paths(self._conanfile, "%~dp0")
         for varname, varvalues in self._values.items():
-            value = varvalues.get_str("%{name}%", subsystem=self._subsystem, pathsep=self._pathsep)
+            value = varvalues.get_str("%{name}%", subsystem=self._subsystem, pathsep=self._pathsep,
+                                      root_path=abs_base_path, script_path=new_path)
             result.append('set "{}={}"'.format(varname, value))
 
         content = "\n".join(result)
-        content = relativize_generated_file(content, self._conanfile, "%~dp0")
         # It is very important to save it correctly with utf-8, the Conan util save() is broken
         os.makedirs(os.path.dirname(os.path.abspath(file_location)), exist_ok=True)
-        open(file_location, "w", encoding="utf-8").write(content)
+        with open(file_location, "w", encoding="utf-8") as f:
+            f.write(content)
 
     def save_ps1(self, file_location, generate_deactivate=True,):
         _, filename = os.path.split(file_location)
@@ -456,8 +473,10 @@ class EnvVars:
             {deactivate}
         """).format(deactivate=deactivate if generate_deactivate else "")
         result = [capture]
+        abs_base_path, new_path = relativize_paths(self._conanfile, "$PSScriptRoot")
         for varname, varvalues in self._values.items():
-            value = varvalues.get_str("$env:{name}", subsystem=self._subsystem, pathsep=self._pathsep)
+            value = varvalues.get_str("$env:{name}", subsystem=self._subsystem, pathsep=self._pathsep,
+                                      root_path=abs_base_path, script_path=new_path)
             if value:
                 value = value.replace('"', '`"')  # escape quotes
                 result.append('$env:{}="{}"'.format(varname, value))
@@ -472,7 +491,7 @@ class EnvVars:
 
     def save_sh(self, file_location, generate_deactivate=True):
         filepath, filename = os.path.split(file_location)
-        deactivate_file = os.path.join(filepath, "deactivate_{}".format(filename))
+        deactivate_file = os.path.join("$script_folder", "deactivate_{}".format(filename))
         deactivate = textwrap.dedent("""\
            echo "echo Restoring environment" > "{deactivate_file}"
            for v in {vars}
@@ -491,8 +510,10 @@ class EnvVars:
               {deactivate}
               """).format(deactivate=deactivate if generate_deactivate else "")
         result = [capture]
+        abs_base_path, new_path = relativize_paths(self._conanfile, "$script_folder")
         for varname, varvalues in self._values.items():
-            value = varvalues.get_str("${name}", self._subsystem, pathsep=self._pathsep)
+            value = varvalues.get_str("${name}", self._subsystem, pathsep=self._pathsep,
+                                      root_path=abs_base_path, script_path=new_path)
             value = value.replace('"', '\\"')
             if value:
                 result.append('export {}="{}"'.format(varname, value))
@@ -500,14 +521,14 @@ class EnvVars:
                 result.append('unset {}'.format(varname))
 
         content = "\n".join(result)
-        content = relativize_generated_file(content, self._conanfile, "$script_folder")
         content = f'script_folder="{os.path.abspath(filepath)}"\n' + content
         save(file_location, content)
 
     def save_script(self, filename):
         """
         Saves a script file (bat, sh, ps1) with a launcher to set the environment.
-        If the conf "tools.env.virtualenv:powershell" is set to True it will generate powershell
+        If the conf "tools.env.virtualenv:powershell" is not an empty string
+        it will generate powershell
         launchers if Windows.
 
         :param filename: Name of the file to generate. If the extension is provided, it will generate
@@ -520,7 +541,19 @@ class EnvVars:
             is_ps1 = ext == ".ps1"
         else:  # Need to deduce it automatically
             is_bat = self._subsystem == WINDOWS
-            is_ps1 = self._conanfile.conf.get("tools.env.virtualenv:powershell", check_type=bool)
+            try:
+                is_ps1 = self._conanfile.conf.get("tools.env.virtualenv:powershell", check_type=bool)
+                if is_ps1 is not None:
+                    ConanOutput().warning(
+                        "Boolean values for 'tools.env.virtualenv:powershell' are deprecated. "
+                        "Please specify 'powershell.exe' or 'pwsh' instead, appending arguments if needed "
+                        "(for example: 'powershell.exe -argument'). "
+                        "To unset this configuration, use `tools.env.virtualenv:powershell=!`, which matches "
+                        "the previous 'False' behavior.",
+                        warn_tag="deprecated"
+                    )
+            except ConanException:
+                is_ps1 = self._conanfile.conf.get("tools.env.virtualenv:powershell", check_type=str)
             if is_ps1:
                 filename = filename + ".ps1"
                 is_bat = False
@@ -612,6 +645,14 @@ class ProfileEnvironment:
                 env = Environment()
                 if method == "unset":
                     env.unset(name)
+                elif value.strip().startswith("(sep="):
+                    value = value.strip()
+                    sep = value[5]
+                    value = value[7:]
+                    if value.strip().startswith("(path)"):
+                        msg = f"Cannot use (sep) and (path) qualifiers simultaneously: {line}"
+                        raise ConanException(msg)
+                    getattr(env, method)(name, value, separator=sep)
                 else:
                     if value.strip().startswith("(path)"):
                         value = value.strip()
@@ -630,9 +671,15 @@ class ProfileEnvironment:
         return result
 
 
-def create_env_script(conanfile, content, filename, scope):
+def create_env_script(conanfile, content, filename, scope="build"):
     """
-    Create a file with any content which will be registered as a new script for the defined "group".
+    Create a file with any content which will be registered as a new script for the defined "scope".
+
+    Args:
+        conanfile: The Conanfile instance.
+        content (str): The content of the script to write into the file.
+        filename (str): The name of the file to be created in the generators folder.
+        scope (str): The scope or environment group for which the script will be registered.
     """
     path = os.path.join(conanfile.generators_folder, filename)
     save(path, content)
@@ -641,11 +688,16 @@ def create_env_script(conanfile, content, filename, scope):
         register_env_script(conanfile, path, scope)
 
 
-def register_env_script(conanfile, env_script_path, scope):
+def register_env_script(conanfile, env_script_path, scope="build"):
     """
-    Add the "env_script_path" to the current list of registered scripts for defined "group"
+    Add the "env_script_path" to the current list of registered scripts for defined "scope"
     These will be mapped to files:
     - conan{group}.bat|sh = calls env_script_path1,... env_script_pathN
+
+    Args:
+        conanfile: The Conanfile instance.
+        env_script_path (str): The full path of the script to register.
+        scope (str): The scope ('build' or 'host') for which the script will be registered.
     """
     existing = conanfile.env_scripts.setdefault(scope, [])
     if env_script_path not in existing:

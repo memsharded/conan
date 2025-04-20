@@ -1,7 +1,7 @@
 from urllib.parse import urlencode
 
-from conans.model.recipe_ref import RecipeReference
-from conans.model.rest_routes import RestRoutes
+from conan.api.model import RecipeReference
+from conans.client.rest.rest_routes import RestRoutes
 
 
 def _format_ref(url, ref):
@@ -48,9 +48,6 @@ class ClientV2Router:
             if ref.revision else self.routes.common_search_packages
         url = _format_ref(route, ref)
         return self.base_url + url
-
-    def oauth_authenticate(self):
-        return self.base_url + self.routes.oauth_authenticate
 
     def common_authenticate(self):
         return self.base_url + self.routes.common_authenticate

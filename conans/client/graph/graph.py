@@ -1,7 +1,8 @@
 from collections import OrderedDict
 
-from conans.model.package_ref import PkgReference
-from conans.model.recipe_ref import RecipeReference
+from conans.client.graph.graph_error import GraphError
+from conan.api.model import PkgReference
+from conan.api.model import RecipeReference
 
 RECIPE_DOWNLOADED = "Downloaded"
 RECIPE_INCACHE = "Cache"  # The previously installed recipe in cache is being used
@@ -14,7 +15,7 @@ RECIPE_NO_REMOTE = "No remote"
 RECIPE_EDITABLE = "Editable"
 RECIPE_CONSUMER = "Consumer"  # A conanfile from the user
 RECIPE_VIRTUAL = "Cli"  # A virtual conanfile (dynamic in memory conanfile)
-RECIPE_SYSTEM_TOOL = "System tool"
+RECIPE_PLATFORM = "Platform"
 
 BINARY_CACHE = "Cache"
 BINARY_DOWNLOAD = "Download"
@@ -25,7 +26,7 @@ BINARY_SKIP = "Skip"
 BINARY_EDITABLE = "Editable"
 BINARY_EDITABLE_BUILD = "EditableBuild"
 BINARY_INVALID = "Invalid"
-BINARY_SYSTEM_TOOL = "System tool"
+BINARY_PLATFORM = "Platform"
 
 CONTEXT_HOST = "host"
 CONTEXT_BUILD = "build"
@@ -57,15 +58,34 @@ class Node(object):
         self.binary_remote = None
         self.context = context
         self.test = test
-        self.test_package = False  # True if it is a test_package only package
 
         # real graph model
         self.transitive_deps = OrderedDict()  # of _TransitiveRequirement
         self.dependencies = []  # Ordered Edges
         self.dependants = []  # Edges
         self.error = None
-        self.cant_build = False  # It will set to a str with a reason if the validate_build() fails
         self.should_build = False  # If the --build or policy wants to build this binary
+        self.build_allowed = False
+        self.is_conf = False
+        self.replaced_requires = {}  # To track the replaced requires for self.dependencies[old-ref]
+        self.skipped_build_requires = False
+
+    def subgraph(self):
+        nodes = [self]
+        opened = [self]
+        while opened:
+            new_opened = []
+            for o in opened:
+                for n in o.neighbors():
+                    if n not in nodes:
+                        nodes.append(n)
+                    if n not in opened:
+                        new_opened.append(n)
+            opened = new_opened
+
+        graph = DepsGraph()
+        graph.nodes = nodes
+        return graph
 
     def __lt__(self, other):
         """
@@ -95,18 +115,25 @@ class Node(object):
                 # print("  +++++Runtime conflict!", require, "with", node.ref)
                 return True
             require.aggregate(existing.require)
+            # An override can be overriden by a downstream force/override
+            if existing.require.override and existing.require.ref != require.ref:
+                # If it is an override, but other value, it has been overriden too
+                existing.require.overriden_ref = existing.require.ref
+                existing.require.override_ref = require.ref
 
         assert not require.version_range  # No ranges slip into transitive_deps definitions
         # TODO: Might need to move to an update() for performance
         self.transitive_deps.pop(require, None)
         self.transitive_deps[require] = TransitiveRequirement(require, node)
 
+        if self.conanfile.vendor:
+            return
         # Check if need to propagate downstream
         if not self.dependants:
             return
 
         if src_node is not None:  # This happens when closing a loop, and we need to know the edge
-            d = [d for d in self.dependants if d.src is src_node][0]  # TODO: improve ugly
+            d = next(d for d in self.dependants if d.src is src_node)
         else:
             assert len(self.dependants) == 1
             d = self.dependants[0]
@@ -116,6 +143,12 @@ class Node(object):
         if down_require is None:
             return
 
+        down_require.defining_require = require.defining_require
+        # If the requirement propagates .files downstream, cannot be skipped
+        # But if the files are not needed in this graph branch, can be marked "Skip"
+        if down_require.files:
+            down_require.required_nodes = require.required_nodes.copy()
+        down_require.required_nodes.add(self)
         return d.src.propagate_downstream(down_require, node)
 
     def check_downstream_exists(self, require):
@@ -126,6 +159,9 @@ class Node(object):
             if require.build and (self.context == CONTEXT_HOST or  # switch context
                                   require.ref.version != self.ref.version):  # or different version
                 pass
+            elif require.visible is False:  # and require.ref.version != self.ref.version:
+                # Experimental, to support repackaging of openssl previous versions FIPS plugins
+                pass  # An invisible require doesn't conflict with itself
             else:
                 return None, self, self  # First is the require, as it is a loop => None
 
@@ -143,6 +179,8 @@ class Node(object):
         # Check if need to propagate downstream
         # Then propagate downstream
 
+        if self.conanfile.vendor:
+            return result
         # Seems the algrithm depth-first, would only have 1 dependant at most to propagate down
         # at any given time
         if not self.dependants:
@@ -159,18 +197,21 @@ class Node(object):
             # print("    No need to check downstream more")
             return result
 
+        down_require.defining_require = require.defining_require
         source_node = dependant.src
         return source_node.check_downstream_exists(down_require) or result
 
-    def check_loops(self, new_node):
+    def check_loops(self, new_node, count=0):
         if self.ref == new_node.ref and self.context == new_node.context:
-            return self
+            if count >= 1:
+                return self
+            count += 1
         if not self.dependants:
             return
         assert len(self.dependants) == 1
         dependant = self.dependants[0]
         source_node = dependant.src
-        return source_node.check_loops(new_node)
+        return source_node.check_loops(new_node, count)
 
     @property
     def package_id(self):
@@ -192,7 +233,6 @@ class Node(object):
 
     def add_edge(self, edge):
         if edge.src == self:
-            assert edge not in self.dependencies
             self.dependencies.append(edge)
         else:
             self.dependants.append(edge)
@@ -213,13 +253,16 @@ class Node(object):
         result["recipe"] = self.recipe
         result["package_id"] = self.package_id
         result["prev"] = self.prev
+        result["rrev"] = self.ref.revision if self.ref is not None else None
+        result["rrev_timestamp"] = self.ref.timestamp if self.ref is not None else None
+        result["prev_timestamp"] = self.pref_timestamp
         result["remote"] = self.remote.name if self.remote else None
         result["binary_remote"] = self.binary_remote.name if self.binary_remote else None
         from conans.client.installer import build_id
         result["build_id"] = build_id(self.conanfile)
         result["binary"] = self.binary
         # TODO: This doesn't match the model, check it
-        result["invalid_build"] = self.cant_build
+        result["invalid_build"] = getattr(getattr(self.conanfile, "info", None), "cant_build", False)
         result["info_invalid"] = getattr(getattr(self.conanfile, "info", None), "invalid", None)
         # Adding the conanfile information: settings, options, etc
         result.update(self.conanfile.serialize())
@@ -270,9 +313,9 @@ class Overrides:
         overrides = {}
         for n in nodes:
             for r in n.conanfile.requires.values():
-                if r.override:
+                if r.override and not r.overriden_ref:  # overrides are not real graph edges
                     continue
-                if r.overriden_ref and not r.force:
+                if r.overriden_ref:
                     overrides.setdefault(r.overriden_ref, set()).add(r.override_ref)
                 else:
                     overrides.setdefault(r.ref, set()).add(None)
@@ -316,7 +359,13 @@ class DepsGraph(object):
         self.nodes = []
         self.aliased = {}
         self.resolved_ranges = {}
+        self.replaced_requires = {}
+        self.options_conflicts = {}
         self.error = False
+
+    def lockfile(self):
+        from conan.internal.model.lockfile import Lockfile
+        return Lockfile(self)
 
     def overrides(self):
         return Overrides.create(self.nodes)
@@ -331,8 +380,8 @@ class DepsGraph(object):
     def add_node(self, node):
         self.nodes.append(node)
 
-    def add_edge(self, src, dst, require):
-        assert src in self.nodes and dst in self.nodes
+    @staticmethod
+    def add_edge(src, dst, require):
         edge = Edge(src, dst, require)
         src.add_edge(edge)
         dst.add_edge(edge)
@@ -369,13 +418,6 @@ class DepsGraph(object):
 
         return result
 
-    def build_time_nodes(self):
-        """ return all the nodes in the graph that are build-requires (either directly or
-        transitively). Nodes that are both in requires and build_requires will not be returned.
-        This is used just for output purposes, printing deps, HTML graph, etc.
-        """
-        return [n for n in self.nodes if n.context == CONTEXT_BUILD]
-
     def report_graph_error(self):
         if self.error:
             raise self.error
@@ -388,4 +430,6 @@ class DepsGraph(object):
         result["root"] = {self.root.id: repr(self.root.ref)}  # TODO: ref of consumer/virtual
         result["overrides"] = self.overrides().serialize()
         result["resolved_ranges"] = {repr(r): s.repr_notime() for r, s in self.resolved_ranges.items()}
+        result["replaced_requires"] = {k: v for k, v in self.replaced_requires.items()}
+        result["error"] = self.error.serialize() if isinstance(self.error, GraphError) else None
         return result
