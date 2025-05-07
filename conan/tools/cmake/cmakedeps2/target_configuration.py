@@ -71,11 +71,7 @@ class TargetConfigurationTemplate2:
                 try:
                     dep = transitive_reqs[required_pkg]
                 except KeyError:  # The transitive dep might have been skipped
-                    extra_deps = getattr(self._conanfile, "extra_dependencies", [])
-                    if required_pkg in extra_deps:
-                        dep_target = f"{required_pkg}::{required_comp}"
-                        link = not (pkg_type is PackageType.SHARED)
-                        result[dep_target] = link
+                    pass
                 else:
                     # To check if the component exist, it is ok to use the standard cpp_info
                     # No need to use the cpp_info = deduce_cpp_info(dep)
@@ -280,9 +276,6 @@ class TargetConfigurationTemplate2:
         transitive_reqs = self._cmakedeps.get_transitive_requires(self._conanfile)
         # FIXME: Hardcoded CONFIG
         ret = {self._cmakedeps.get_cmake_filename(r): "CONFIG" for r in transitive_reqs.values()}
-
-        # Makes the find_dependency to multiple CONFIG files
-        ret.update({k: "CONFIG" for k in getattr(self._conanfile, "extra_dependencies", [])})
         return ret
 
     @staticmethod

@@ -87,6 +87,9 @@ class UserRequirementsDict(object):
 
 class ConanFileDependencies(UserRequirementsDict):
 
+    def copy(self):
+        return ConanFileDependencies(self._data.copy())
+
     @staticmethod
     def from_node(node):
         d = OrderedDict((require, ConanFileInterface(transitive.node.conanfile))

@@ -9,7 +9,8 @@ from conan.errors import ConanException
 from conan.internal import check_duplicated_generator
 from conan.internal.api.install.generators import relativize_path
 from conan.internal.model.cpp_info import CppInfo
-from conan.internal.model.dependencies import get_transitive_requires
+from conan.internal.model.dependencies import get_transitive_requires, ConanFileDependencies
+from conan.internal.model.requires import Requirement
 from conan.tools.cmake.cmakedeps2.config import ConfigTemplate2
 from conan.tools.cmake.cmakedeps2.config_version import ConfigVersionTemplate2
 from conan.tools.cmake.cmakedeps2.target_configuration import TargetConfigurationTemplate2
@@ -26,16 +27,16 @@ FIND_MODE_BOTH = "both"
 class _ConanFileClone:
     def __init__(self, conanfile):
         self.display_name = str(conanfile)
-        self._conanfile = conanfile
-        self.ref = conanfile.ref
+        self._conanfile = conanfile._conanfile
+        self.ref = conanfile.ref.copy()
         self.context = conanfile.context
         self.cpp_info = CppInfo()
         self.settings = conanfile.settings
         self.package_folder = conanfile.package_folder
-        self.dependencies = conanfile.dependencies
+        self.dependencies = conanfile.dependencies.copy()
         self.package_type = conanfile.package_type
         self.languages = conanfile.languages
-        self.extra_dependencies = []
+
 
 
 class CMakeDeps2:
@@ -92,9 +93,15 @@ class CMakeDeps2:
 
             if len(deps) > 1:
                 final_deps = []
+                base_one = _ConanFileClone(dep)
+                base_one.dependencies = ConanFileDependencies({})
+                final_deps.append(base_one)
+                cloned_dict = {}
                 for cmakefile, compnames in deps.items():
                     clone = _ConanFileClone(dep)
                     clone.cpp_info.set_property("cmake_file_name", cmakefile)
+                    clone.ref.name = cmakefile
+                    other_names = []
                     for cname in compnames:
                         cloned_comp = dep.cpp_info.components[cname].clone()
                         new_reqs = []
@@ -103,11 +110,27 @@ class CMakeDeps2:
                                 new_reqs.append(r)
                             else:
                                 other_name = file_from_comp[r]
+                                other_names.append(other_name)
                                 new_reqs.append(f"{other_name}::{r}")
-                                clone.extra_dependencies.append(other_name)
+
                         cloned_comp.requires = new_reqs
                         clone.cpp_info.components[cname] = cloned_comp
+
+                    cloned_dict[cmakefile] = clone, other_names
+                    new_req = require.copy_requirement()
+                    new_req.ref = new_req.ref.copy()
+                    new_req.ref.name = cmakefile
+                    base_one.dependencies._data[new_req] = clone
                     final_deps.append(clone)
+
+                print("BASE DEPS", base_one.dependencies.items())
+
+                for cmakefile, (clone, other_names) in cloned_dict.items():
+                    for other_name in other_names:
+                        new_req = require.copy_requirement()
+                        new_req.ref = new_req.ref.copy()
+                        new_req.ref.name = cmakefile
+                        clone.dependencies._data[new_req] = cloned_dict[other_name][0]
             else:
                 final_deps = [dep]
 
