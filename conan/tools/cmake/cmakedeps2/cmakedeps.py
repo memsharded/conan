@@ -8,6 +8,7 @@ from conan.api.output import Color, ConanOutput
 from conan.errors import ConanException
 from conan.internal import check_duplicated_generator
 from conan.internal.api.install.generators import relativize_path
+from conan.internal.model.cpp_info import CppInfo
 from conan.internal.model.dependencies import get_transitive_requires
 from conan.tools.cmake.cmakedeps2.config import ConfigTemplate2
 from conan.tools.cmake.cmakedeps2.config_version import ConfigVersionTemplate2
@@ -20,6 +21,21 @@ FIND_MODE_MODULE = "module"
 FIND_MODE_CONFIG = "config"
 FIND_MODE_NONE = "none"
 FIND_MODE_BOTH = "both"
+
+
+class _ConanFileClone:
+    def __init__(self, conanfile):
+        self.display_name = str(conanfile)
+        self._conanfile = conanfile
+        self.ref = conanfile.ref
+        self.context = conanfile.context
+        self.cpp_info = CppInfo()
+        self.settings = conanfile.settings
+        self.package_folder = conanfile.package_folder
+        self.dependencies = conanfile.dependencies
+        self.package_type = conanfile.package_type
+        self.languages = conanfile.languages
+        self.extra_dependencies = []
 
 
 class CMakeDeps2:
@@ -66,17 +82,47 @@ class CMakeDeps2:
                                                          # Should this be risk?
                                                          warn_tag="deprecated")
 
-            if require.direct:
-                direct_deps.append((require, dep))
-            config = ConfigTemplate2(self, dep)
-            ret[config.filename] = config.content()
-            config_version = ConfigVersionTemplate2(self, dep)
-            ret[config_version.filename] = config_version.content()
+            deps = {}
+            file_from_comp = {}
+            for comp_name, comp in dep.cpp_info.components.items():
+                cmakefile = comp.get_property("cmake_file_name")
+                if cmakefile:
+                    deps.setdefault(cmakefile, []).append(comp_name)
+                    file_from_comp[comp_name] = cmakefile
 
-            targets = TargetsTemplate2(self, dep)
-            ret[targets.filename] = targets.content()
-            target_configuration = TargetConfigurationTemplate2(self, dep, require)
-            ret[target_configuration.filename] = target_configuration.content()
+            if len(deps) > 1:
+                final_deps = []
+                for cmakefile, compnames in deps.items():
+                    clone = _ConanFileClone(dep)
+                    clone.cpp_info.set_property("cmake_file_name", cmakefile)
+                    for cname in compnames:
+                        cloned_comp = dep.cpp_info.components[cname].clone()
+                        new_reqs = []
+                        for r in cloned_comp.requires:
+                            if "::" in r or r in compnames:
+                                new_reqs.append(r)
+                            else:
+                                other_name = file_from_comp[r]
+                                new_reqs.append(f"{other_name}::{r}")
+                                clone.extra_dependencies.append(other_name)
+                        cloned_comp.requires = new_reqs
+                        clone.cpp_info.components[cname] = cloned_comp
+                    final_deps.append(clone)
+            else:
+                final_deps = [dep]
+
+            for mydep in final_deps:
+                if require.direct:
+                    direct_deps.append((require, mydep))
+                config = ConfigTemplate2(self, mydep)
+                ret[config.filename] = config.content()
+                config_version = ConfigVersionTemplate2(self, mydep)
+                ret[config_version.filename] = config_version.content()
+
+                targets = TargetsTemplate2(self, mydep)
+                ret[targets.filename] = targets.content()
+                target_configuration = TargetConfigurationTemplate2(self, mydep, require)
+                ret[target_configuration.filename] = target_configuration.content()
 
         self._print_help(direct_deps)
         return ret
@@ -253,6 +299,17 @@ class _PathGenerator:
                             pkg_paths[pkg_name] = relativize_path(pkg_folder, self._conanfile,
                                                                   "${CMAKE_CURRENT_LIST_DIR}")
                 continue
+
+            # TODO: Repeated from above
+            deps = {}
+            for comp_name, comp in dep.cpp_info.components.items():
+                cmakefile = comp.get_property("cmake_file_name")
+                if cmakefile:
+                    deps.setdefault(cmakefile, []).append(comp_name)
+
+            if len(deps) > 1:
+                for cmakefile, comps in deps.items():
+                    pkg_paths[cmakefile] = "${CMAKE_CURRENT_LIST_DIR}"
 
             # If CMakeDeps generated, the folder is this one
             # content.append(f'set({pkg_name}_ROOT "{gen_folder}")')
