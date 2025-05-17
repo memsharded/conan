@@ -7,8 +7,8 @@ import textwrap
 from conan.api.output import ConanOutput
 from conan.errors import ConanException
 from conan.internal.model.version import Version
-from conans.util.files import load, save
-from conans.util.runners import check_output_runner, detect_runner
+from conan.internal.util.files import load, save
+from conan.internal.util.runners import check_output_runner, detect_runner
 
 
 def detect_os():
@@ -347,6 +347,55 @@ def detect_cppstd(compiler, compiler_version):
     return cppstd
 
 
+def default_cstd(compiler, compiler_version):
+    """returns the default cstd for the compiler-version. This is not detected, just the default"""
+
+    def _clang_cstd_default(version):
+        if version >= "11":
+            return "gnu17"  # https://releases.llvm.org/11.0.0/tools/clang/docs/ReleaseNotes.html#c-language-changes-in-clang
+        elif version >= "4":  # 3.5 actually
+            return "gnu11"
+        else:
+            return "gnu99"  # It was gnu89 actually
+
+    def _gcc_cstd_default(version):
+        if version >= "15":  # https://www.gnu.org/software/gcc/gcc-15/changes.html#c
+            return "gnu23"
+        elif version >= "8":
+            return "gnu17"  # https://www.gnu.org/software/gcc/gcc-8/changes.html#c
+        elif version >= "5":
+            return "gnu11"  # https://www.gnu.org/software/gcc/gcc-5/changes.html#c
+        else:
+            return "gnu99"  # It was gnu89 actually
+
+    def _visual_cstd_default(version):
+        return None
+
+    def _apple_clang_cstd_default(version):
+        # Based on which LLVM/Clang versions these are based on
+        if version >= "12":
+            return "gnu17"
+        if version >= "10":
+            return "gnu11"
+        return "gnu99"
+
+    def _intel_cstd_default(version):
+        return None
+
+    def _mcst_lcc_cstd_default(version):
+        return None
+
+    default = {
+        "gcc": _gcc_cstd_default(compiler_version),
+        "clang": _clang_cstd_default(compiler_version),
+        "apple-clang": _apple_clang_cstd_default(compiler_version),
+        "intel-cc": _intel_cstd_default(compiler_version),
+        "msvc": _visual_cstd_default(compiler_version),
+        "mcst-lcc": _mcst_lcc_cstd_default(compiler_version),
+    }.get(str(compiler), None)
+    return default
+
+
 def detect_default_compiler():
     """
         find the default compiler on the build machine
@@ -461,14 +510,12 @@ def detect_gcc_compiler(compiler_exe="gcc"):
             if "clang" in out:
                 return None, None, None
 
+        # TODO: Add -dumpfullversion to always return major.minor
         ret, out = detect_runner('%s -dumpversion' % compiler_exe)
         if ret != 0:
             return None, None, None
         compiler = "gcc"
         installed_version = re.search(r"([0-9]+(\.[0-9])?)", out).group()
-        # Since GCC 7.1, -dumpversion return the major version number
-        # only ("7"). We must use -dumpfullversion to get the full version
-        # number ("7.1.1").
         if installed_version:
             ConanOutput(scope="detect_api").info("Found %s %s" % (compiler, installed_version))
             return compiler, Version(installed_version), compiler_exe

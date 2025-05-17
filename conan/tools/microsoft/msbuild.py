@@ -16,7 +16,7 @@ def msbuild_verbosity_cmd_line_arg(conanfile):
             "quiet": "Quiet",
             "verbose": "Detailed",
         }.get(verbosity)
-        return f'/verbosity:{verbosity}'
+        return f'-verbosity:{verbosity}'
     return ""
 
 
@@ -45,14 +45,14 @@ class MSBuild:
     def command(self, sln, targets=None):
         """
         Gets the ``msbuild`` command line. For instance,
-        :command:`msbuild "MyProject.sln" /p:Configuration=<conf> /p:Platform=<platform>`.
+        :command:`msbuild.exe "MyProject.sln" -p:Configuration=<conf> -p:Platform=<platform>`.
 
         :param sln: ``str`` name of Visual Studio ``*.sln`` file
         :param targets: ``targets`` is an optional argument, defaults to ``None``, and otherwise it is a list of targets to build
         :return: ``str`` msbuild command line.
         """
         # TODO: Enable output_binary_log via config
-        cmd = ('msbuild "%s" /p:Configuration="%s" /p:Platform=%s'
+        cmd = ('msbuild.exe "%s" -p:Configuration="%s" -p:Platform=%s'
                % (sln, self.build_type, self.platform))
 
         verbosity = msbuild_verbosity_cmd_line_arg(self._conanfile)
@@ -62,12 +62,12 @@ class MSBuild:
         maxcpucount = self._conanfile.conf.get("tools.microsoft.msbuild:max_cpu_count",
                                                check_type=int)
         if maxcpucount is not None:
-            cmd += f" /m:{maxcpucount}" if maxcpucount > 0 else " /m"
+            cmd += f" -m:{maxcpucount}" if maxcpucount > 0 else " -m"
 
         if targets:
             if not isinstance(targets, list):
                 raise ConanException("targets argument should be a list")
-            cmd += " /target:{}".format(";".join(targets))
+            cmd += " -target:{}".format(";".join(targets))
 
         toolchain = os.path.join(self._conanfile.generators_folder, "conantoolchain.props")
         if os.path.exists(toolchain):
