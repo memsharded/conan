@@ -49,7 +49,7 @@ def test_msbuild_lib_2022():
     assert "hello/0.1: _MSC_VER191" in client.out
 
     # Create works
-    client.run("create . -s compiler.version=193")
+    client.run("create . -s compiler.version=193 -s compiler.update=8")
     assert "hello/0.1: Hello World Release!" in client.out
     assert "Activating environment Visual Studio 17" in client.out
     assert "hello/0.1: _MSC_VER193" in client.out

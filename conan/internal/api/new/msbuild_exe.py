@@ -27,7 +27,7 @@ class {{package_name}}Conan(ConanFile):
     exports_sources = "{{name}}.sln", "{{name}}.vcxproj", "src/*"
 
     def layout(self):
-        vs_layout(self)
+        vs_layout(self, src_folder="src")
 
     def generate(self):
         tc = MSBuildToolchain(self)
@@ -76,9 +76,9 @@ int main() {
 
 
 msbuild_exe_files = {"conanfile.py": conanfile_exe,
-                     "src/{{name}}.cpp": test_exe,
-                     "{{name}}.sln": sln_file.replace("test_", ""),
-                     "{{name}}.vcxproj": vcxproj.replace("TYPE_PLACEHOLDER", "Application")
+                     "src/src/{{name}}.cpp": test_exe,
+                     "src/{{name}}.sln": sln_file.replace("test_", ""),
+                     "src/{{name}}.vcxproj": vcxproj.replace("TYPE_PLACEHOLDER", "Application")
                                                 .replace("DEPENDENCIES", "").replace("test_", ""),
                      "test_package/conanfile.py": test_conanfile_exe_v2
                      }

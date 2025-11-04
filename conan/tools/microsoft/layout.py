@@ -4,16 +4,18 @@ from conan.errors import ConanException
 from conan.tools.microsoft.visual import msvc_platform_from_arch
 
 
-def vs_layout(conanfile):
+def vs_layout(conanfile, src_folder=None, build_folder=None):
     """
     Initialize a layout for a typical Visual Studio project.
 
     :param conanfile: ``< ConanFile object >`` The current recipe object. Always use ``self``.
+    :param src_folder:
+    :param build_folder:
     """
-    subproject = conanfile.folders.subproject
-    conanfile.folders.source = subproject or "."
+    subproject = conanfile.folders.subproject or "."
+    conanfile.folders.source = subproject or src_folder
     conanfile.folders.generators = os.path.join(subproject, "conan") if subproject else "conan"
-    conanfile.folders.build = subproject or "."
+    conanfile.folders.build = subproject or build_folder
     conanfile.cpp.source.includedirs = ["include"]
 
     try:
