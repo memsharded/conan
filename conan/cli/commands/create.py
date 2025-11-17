@@ -48,11 +48,15 @@ def create(conan_api, parser, *args):
     remotes = conan_api.remotes.list(args.remote) if not args.no_remote else []
     profile_host, profile_build = conan_api.profiles.get_profiles_from_args(args)
 
-    ref, conanfile = conan_api.export.export(path=path,
-                                             name=args.name, version=args.version,
-                                             user=args.user, channel=args.channel,
-                                             lockfile=lockfile,
-                                             remotes=remotes)
+    ws_conanfile = conan_api.workspace.get_conanfile(path=path)
+    if ws_conanfile:
+        ref, conanfile = ws_conanfile
+    else:
+        ref, conanfile = conan_api.export.export(path=path,
+                                                 name=args.name, version=args.version,
+                                                 user=args.user, channel=args.channel,
+                                                 lockfile=lockfile,
+                                                 remotes=remotes)
 
     # FIXME: Dirty: package type still raw, not processed yet
     is_build = args.build_require or conanfile.package_type == "build-scripts"

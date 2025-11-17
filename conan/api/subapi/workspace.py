@@ -127,7 +127,7 @@ class WorkspaceAPI:
                                                 user=conanfile.user, channel=conanfile.channel)
                 else:
                     reference = RecipeReference.loads(ref)
-                reference.validate_ref(reference)
+                reference.validate_ref()
             except Exception as e:
                 raise ConanException(f"Workspace package reference could not be deduced by"
                                      f" {rel_path}/conanfile.py or it is not"
@@ -384,3 +384,25 @@ class WorkspaceAPI:
             install_order.merge(install_graph)
 
         return install_order
+
+    def get_conanfile(self, path):
+        if not self._folder or not self._enabled:
+            return
+        assert os.path.isabs(path) and os.path.isfile(path), f"{path} conanfile.py must exist"
+        path = os.path.normpath(path)
+        for editable_info in self._ws.packages():
+            rel_path = editable_info["path"]
+            ws_path = os.path.normpath(os.path.join(self._folder, rel_path, "conanfile.py"))
+            if not os.path.isfile(path):
+                raise ConanException(f"Workspace package not found: {ws_path}")
+            if path == ws_path:
+                ref = editable_info.get("ref")
+                conanfile = self._ws.load_conanfile(rel_path)
+                if ref is not None:
+                    ref = RecipeReference.loads(ref)
+                    ref.validate_ref()
+                    conanfile.name = ref.name
+                    conanfile.version = ref.version
+                    conanfile.user = ref.user
+                    conanfile.channel = ref.channel
+                return ref, conanfile

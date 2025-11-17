@@ -1049,6 +1049,18 @@ class TestCreate:
         assert "protobuf/0.1: Building for: Linux!!!" in c.out
 
 
+def test_local_create_dont_export():
+    # regular create command do not export
+    c = TestClient()
+    c.save({"liba/conanfile.py": GenConanfile("liba", "0.1")})
+    c.run("workspace init .")
+    c.run("workspace add liba")
+    c.run("create liba")
+    c.run("list")
+    assert "liba/0.1" not in c.out
+    assert "WARN: There are no matching recipe references" in c.out
+
+
 class TestSource:
     def test_source(self):
         c = TestClient(light=True)
