@@ -90,3 +90,27 @@ class TestVersionRangesMultiRemote:
         client.run("install hello1 --build missing -r=other")
         assert "hello0/0.2" not in client.out
         assert "hello0/0.3" in client.out
+
+
+def test_resolution_order():
+    c = TestClient(light=True, default_server_user=True)
+    c.save({"liba/conanfile.py": GenConanfile("liba"),
+            "libb/conanfile.py": GenConanfile("libb", "1.0").with_requirement("liba/1.1"),
+            "libc/conanfile.py": GenConanfile("libc", "1.0").with_requirement("liba/[*]",
+                                                                              visible=False),
+            "app/conanfile.py": GenConanfile().with_requires("libb/1.0", "libc/1.0")})
+    c.run("create liba --version=1.1")
+    c.run("create liba --version=1.2")
+    c.run("create libb")
+    c.run("create libc")
+    c.run("upload * -r=default --confirm")
+    c.run("remove * -c")
+
+    c.run("install app")
+    print(c.out)
+    assert "liba/1.1" in c.out
+    assert "liba/1.2" not in c.out
+
+    c.run("download liba/1.2 -r=default")
+    c.run("install app")
+    print(c.out)

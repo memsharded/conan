@@ -21,11 +21,10 @@ from conan.internal.model.version_range import VersionRange
 
 class DepsGraphBuilder:
 
-    def __init__(self, proxy, loader, resolver, cache, remotes, update, check_update, global_conf):
+    def __init__(self, proxy, loader, resolver, remotes, update, check_update, global_conf):
         self._proxy = proxy
         self._loader = loader
         self._resolver = resolver
-        self._cache = cache
         self._remotes = remotes  # TODO: pass as arg to load_graph()
         self._update = update
         self._check_update = check_update

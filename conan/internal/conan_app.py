@@ -68,12 +68,14 @@ class ConanApp(ConanBasicApp):
         super().__init__(conan_api)
         legacy_update = self._global_conf.get("core:update_policy", choices=["legacy"])
         self.proxy = ConanProxy(self, self.editable_packages, legacy_update=legacy_update)
-        self.range_resolver = RangeResolver(self, self._global_conf, self.editable_packages)
+        self.range_resolver = RangeResolver(self.cache, self.remote_manager, self._global_conf,
+                                            self.editable_packages)
 
         self.pyreq_loader = PyRequireLoader(self, self._global_conf)
         cmd_wrap = CmdWrapper(HomePaths(self.cache_folder).wrapper_path)
         requester = conan_api._api_helpers.requester  # noqa
-        conanfile_helpers = ConanFileHelpers(requester, cmd_wrap, self._global_conf, self.cache, self.cache_folder)
+        conanfile_helpers = ConanFileHelpers(requester, cmd_wrap, self._global_conf, self.cache,
+                                             self.cache_folder)
         self.loader = ConanFileLoader(self.pyreq_loader, conanfile_helpers)
 
 
@@ -90,7 +92,8 @@ class LocalRecipesIndexApp:
         self.remote_manager = RemoteManager(self.cache, auth_manager=None, home_folder=cache_folder)
         editable_packages = EditablePackages()
         self.proxy = ConanProxy(self, editable_packages)
-        self.range_resolver = RangeResolver(self, self.global_conf, editable_packages)
+        self.range_resolver = RangeResolver(self.cache, self.remote_manager, self.global_conf,
+                                            editable_packages)
         pyreq_loader = PyRequireLoader(self, self.global_conf)
         helpers = ConanFileHelpers(None, CmdWrapper(""), self.global_conf, self.cache, cache_folder)
         self.loader = ConanFileLoader(pyreq_loader, helpers)
