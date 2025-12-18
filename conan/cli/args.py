@@ -31,7 +31,7 @@ def add_lockfile_args(parser):
     group.add_argument("-l", "--lockfile", action=OnceArgument,
                        help="Path to a lockfile. Use --lockfile=\"\" to avoid automatic use of "
                             "existing 'conan.lock' file")
-    group.add_argument("--lockfile-partial", action="store_true",
+    group.add_argument("--lockfile-partial", action="append", nargs="?", const="*",
                        help="Do not raise an error if some dependency is not found in lockfile")
     group.add_argument("--lockfile-out", action=OnceArgument,
                        help="Filename of the updated lockfile")

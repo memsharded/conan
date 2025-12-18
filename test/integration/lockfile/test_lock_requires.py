@@ -356,6 +356,31 @@ def test_partial_lockfile():
     assert "ERROR: Requirement 'pkgc/[*]' not in lockfile" in c.out
 
 
+def test_partial_lockfile_contexts():
+    """
+    make sure that a partial lockfile for different contexts
+    """
+    c = TestClient(light=True)
+    c.save({"tool/conanfile.py": GenConanfile("tool"),
+            "pkgb/conanfile.py": GenConanfile("pkgb"),
+            "pkgc/conanfile.py": GenConanfile("pkgc", "0.1").with_requires("pkgb/[*]")
+                                                            .with_tool_requires("tool/[*]")})
+    c.run("create tool --version=0.1")
+    c.run("create pkgb --version=0.1")
+    c.run("lock create pkgc --lockfile-out=conan.lock")
+    c.run("lock remove --build-requires=*/*")
+    c.run("install pkgc --lockfile=conan.lock", assert_error=True)
+
+    assert "Requirement 'tool/[*]' not in lockfile 'build_requires'" in c.out
+    c.run("install pkgc --lockfile=conan.lock --lockfile-partial=host", assert_error=True)
+    assert "Requirement 'tool/[*]' not in lockfile 'build_requires'" in c.out
+    c.run("install pkgc --lockfile=conan.lock --lockfile-partial=config --lockfile-partial=python",
+          assert_error=True)
+    assert "Requirement 'tool/[*]' not in lockfile 'build_requires'" in c.out
+    c.run("install pkgc --lockfile=conan.lock --lockfile-partial=build")
+    assert "tool/[*]: tool/0.1" in c.out
+
+
 def test_ux_defaults():
     # Make sure the when explicit ``--lockfile`` argument, the file must exist, even if is conan.lock
     c = TestClient(light=True)
@@ -779,4 +804,3 @@ def test_lock_error():
     ref = "runtime_dep/1.2.3"
     c.run(f"install --requires={ref} {settings} --build={ref} "
           "--lockfile=recipes/consumer/conan.lock ")
-

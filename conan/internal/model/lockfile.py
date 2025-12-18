@@ -278,13 +278,13 @@ class Lockfile:
     def resolve_locked(self, node, require, resolve_prereleases):
         if require.build or node.context == CONTEXT_BUILD:
             locked_refs = self._build_requires.refs()
-            kind = "build_requires"
+            kind = "build"
         elif node.is_conf:
             locked_refs = self._conf_requires.refs()
-            kind = "config_requires"
+            kind = "config"
         else:
             locked_refs = self._requires.refs()
-            kind = "requires"
+            kind = "host"
         try:
             self._resolve(require, locked_refs, resolve_prereleases, kind)
         except ConanException:
@@ -329,7 +329,8 @@ class Lockfile:
                     require.ref = m
                     break
             else:
-                if not self.partial:
+                if not self.partial or (self.partial is not True and kind not in self.partial):
+                    kind = kind + "_requires" if kind != "host" else "requires"
                     raise ConanException(f"Requirement '{ref}' not in lockfile '{kind}'")
         else:
             ref = require.ref
@@ -339,10 +340,13 @@ class Lockfile:
                         require.ref = m
                         break
                 else:
-                    if not self.partial:
+                    if not self.partial or (self.partial is not True and kind not in self.partial):
+                        kind = kind + "_requires" if kind != "host" else "requires"
                         raise ConanException(f"Requirement '{ref}' not in lockfile '{kind}'")
             else:
-                if ref not in matches and not self.partial:
+                if ref not in matches and (not self.partial or
+                                           (self.partial is not True and kind not in self.partial)):
+                    kind = kind + "_requires" if kind != "host" else "requires"
                     raise ConanException(f"Requirement '{repr(ref)}' not in lockfile '{kind}'")
 
     def replace_alias(self, require, alias):
@@ -355,4 +359,4 @@ class Lockfile:
 
     def resolve_locked_pyrequires(self, require, resolve_prereleases=None):
         locked_refs = self._python_requires.refs()  # CHANGE
-        self._resolve(require, locked_refs, resolve_prereleases, "python_requires")
+        self._resolve(require, locked_refs, resolve_prereleases, "python")

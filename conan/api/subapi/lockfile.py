@@ -38,6 +38,8 @@ class LockfileAPI:
             # Allow a way with ``--lockfile=""`` to optout automatic usage of conan.lock
             return
 
+        if partial == ["*"]:
+            partial = True
         cwd = cwd or os.getcwd()
         if lockfile is None:  # Look for a default "conan.lock"
             # if path is defined, take it as reference
