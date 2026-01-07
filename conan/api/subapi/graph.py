@@ -188,7 +188,7 @@ class GraphAPI:
         assert profile_build is not None
 
         remotes = remotes or []
-        builder = DepsGraphBuilder(app.proxy, app.loader, app.range_resolver, remotes,
+        builder = DepsGraphBuilder(app.proxy, app.loader, app.range_resolver, app.cache, remotes,
                                    update, check_update, self._conan_api._api_helpers.global_conf)
         deps_graph = builder.load_graph(root_node, profile_host, profile_build, lockfile)
         return deps_graph

@@ -114,3 +114,5 @@ def test_resolution_order():
     c.run("download liba/1.2 -r=default")
     c.run("install app")
     print(c.out)
+    assert "liba/1.1" in c.out
+    assert "liba/1.2" in c.out

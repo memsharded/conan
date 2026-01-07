@@ -169,7 +169,7 @@ class ConfigAPI:
                              recipe=RECIPE_VIRTUAL)
             root_node.is_conf = True
             update = ["*"]
-            builder = DepsGraphBuilder(app.proxy, app.loader, app.range_resolver, remotes,
+            builder = DepsGraphBuilder(app.proxy, app.loader, app.range_resolver, app.cache, remotes,
                                        update, update, self._helpers.global_conf)
             deps_graph = builder.load_graph(root_node, profile_host, profile_build, lockfile)
 
