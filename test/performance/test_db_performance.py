@@ -1,6 +1,5 @@
 import os
 import time
-from unittest.mock import patch
 
 import pytest
 
@@ -82,6 +81,7 @@ def test_contexts():
             print("Constructing MYConnection")
 
         def __enter__(self):
+            raise  # Doesn't really execute!!!!
             print("Enter MYConnection")
 
         def close(self):
@@ -91,6 +91,7 @@ def test_contexts():
             print("Do something MYConnection")
 
         def __exit__(self, type, value, traceback):
+            raise  # Doesn't really execute!!!!
             print("Exit MYConnection")
 
     @contextmanager
