@@ -1,6 +1,8 @@
 import json
+import os
 
 from conan.test.assets.genconanfile import GenConanfile
+from conan.test.utils.test_files import temp_folder
 from conan.test.utils.tools import TestClient
 from conan.test.utils.env import environment_update
 
@@ -10,9 +12,7 @@ class TestOutputLevel:
         t = TestClient(light=True)
         t.save({"conanfile.py": GenConanfile("foo", "1.0")})
         t.run("create . -vfooling", assert_error=True)
-        assert "Invalid argument '-vfooling'" in t.out
-        assert "Allowed values: quiet, error, warning, notice, status, verbose, " \
-               "debug(v), trace(vv)" in t.out
+        assert "argument -v: invalid choice: 'fooling'" in t.out
 
         with environment_update({"CONAN_LOG_LEVEL": "fail"}):
             t.run("create .", assert_error=True)
@@ -291,3 +291,18 @@ def test_formatter_redirection_to_file():
     graph = json.loads(c.load("graph.json"))
     assert len(graph["graph"]["nodes"]) == 1
     assert not "nodes" in c.stdout
+
+
+def test_redirect_to_file_create_dir():
+    c = TestClient(light=True)
+    c.save({"conanfile.py": GenConanfile("pkg", "0.1")})
+    c.run("config home --out-file=subdir/cmd_out.txt")
+    cmd_out = c.load("subdir/cmd_out.txt")
+    assert f"{c.cache_folder}" in cmd_out
+
+    base = temp_folder()
+    c = TestClient(light=True, current_folder=os.path.join(base, "sub1"))
+    c.save({"conanfile.py": GenConanfile("pkg", "0.1")})
+    c.run("config home --out-file=../subdir/cmd_out.txt")
+    cmd_out = c.load("../subdir/cmd_out.txt")
+    assert f"{c.cache_folder}" in cmd_out
