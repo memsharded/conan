@@ -104,16 +104,16 @@ class Node:
         return (str(self.ref), self._package_id) < (str(other.ref), other._package_id)
 
     def propagate_closing_loop(self, require, prev_node, visibility_conflicts):
-        self.propagate_downstream(require, prev_node, visibility_conflicts)
+        self.propagate_downstream(require, prev_node, visibility_conflicts, closing_loop=True)
         # List to avoid mutating the dict
         for transitive in list(prev_node.transitive_deps.values()):
             # TODO: possibly optimize in a bulk propagate
             if transitive.require.override:
                 continue
             prev_node.propagate_downstream(transitive.require, transitive.node, visibility_conflicts,
-                                           self)
+                                           closing_loop=True, src_node=self)
 
-    def propagate_downstream(self, require, node, visibility_conflicts, src_node=None):
+    def propagate_downstream(self, require, node, visibility_conflicts, closing_loop, src_node=None):
         # print("  Propagating downstream ", self, "<-", require)
         assert node is not None
         # This sets the transitive_deps node if it was None (overrides)
@@ -125,6 +125,8 @@ class Node:
             if existing.node is not None and existing.node.ref != node.ref:
                 # print("  +++++Runtime conflict!", require, "with", node.ref)
                 raise GraphConflictError(self, require, existing.node, existing.require, node)
+            if existing.node is not None and existing.node is not node and not closing_loop:
+                return existing.node
             ill_formed = ((require.direct or existing.require.direct)
                           and require.visible != existing.require.visible)
             if ill_formed and not (require.test or existing.require.test):
@@ -169,7 +171,7 @@ class Node:
         if down_require.files:
             down_require.required_nodes = require.required_nodes.copy()
         down_require.required_nodes.add(self)
-        d.src.propagate_downstream(down_require, node, visibility_conflicts)
+        return d.src.propagate_downstream(down_require, node, visibility_conflicts, closing_loop=closing_loop)
 
     def check_downstream_exists(self, require):
         # First, a check against self, could be a loop-conflict

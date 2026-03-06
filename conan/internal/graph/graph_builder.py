@@ -415,9 +415,15 @@ class DepsGraphBuilder:
                                  f"requirement, but {node.ref} is requiring it")
 
         require.process_package_type(node, new_node)
+        prev_node = node.propagate_downstream(require, new_node, graph.visibility_conflicts,
+                                              closing_loop=False)
+        if prev_node is not None:
+            graph.add_edge(node, prev_node, require)
+            node.propagate_closing_loop(require, prev_node, graph.visibility_conflicts)
+            return None  # explicit, no new rquirement, we closed a loop
+
         graph.add_node(new_node)
         graph.add_edge(node, new_node, require)
-        node.propagate_downstream(require, new_node, graph.visibility_conflicts)
 
         # This is necessary to prevent infinite loops even when visibility is False
         ancestor = node.check_loops(new_node)

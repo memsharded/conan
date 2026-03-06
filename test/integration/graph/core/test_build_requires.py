@@ -204,22 +204,18 @@ class TestBuildRequiresTransitivityDiamond(GraphManagerTest):
         assert "Version conflict: Conflict between zlib/0.2 and zlib/0.1 in the graph." in out
         assert "Conflict originates from lib/0.1" in out
 
-        assert 6 == len(deps_graph.nodes)
+        assert 5 == len(deps_graph.nodes)
         app = deps_graph.root
         lib = app.edges[0].dst
         cmake = lib.edges[0].dst
         mingw = lib.edges[1].dst
         zlib1 = cmake.edges[0].dst
-        zlib2 = mingw.edges[0].dst
-
-        assert zlib1 is not zlib2
 
         self._check_node(app, "app/0.1@", deps=[lib], dependents=[])
         self._check_node(lib, "lib/0.1#123", deps=[cmake, mingw], dependents=[app])
         self._check_node(cmake, "cmake/0.1#123", deps=[zlib1], dependents=[lib])
         self._check_node(zlib1, "zlib/0.1#123", deps=[], dependents=[cmake])
-        self._check_node(mingw, "mingw/0.1#123", deps=[zlib2], dependents=[lib])
-        self._check_node(zlib2, "zlib/0.2#123", deps=[], dependents=[mingw])
+        self._check_node(mingw, "mingw/0.1#123", deps=[], dependents=[lib])
 
     def test_build_require_conflict(self):
         # https://github.com/conan-io/conan/issues/4931
