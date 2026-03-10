@@ -125,8 +125,8 @@ class Node:
             if existing.node is not None and existing.node.ref != node.ref:
                 # print("  +++++Runtime conflict!", require, "with", node.ref)
                 raise GraphConflictError(self, require, existing.node, existing.require, node)
-            if existing.node is not None and existing.node is not node and not closing_loop:
-                return existing.node
+            #if existing.node is not None and existing.node is not node and not closing_loop:
+            #    return existing.node
             ill_formed = ((require.direct or existing.require.direct)
                           and require.visible != existing.require.visible)
             if ill_formed and not (require.test or existing.require.test):

@@ -80,7 +80,10 @@ class DepsGraphBuilder:
         # TODO: allow bootstrapping, use references instead of names
         # print("  Expanding require ", node, "->", require)
         self._deduce_host_version(require, node)
+        old_run = require._run  # IMportant: the internal one
+        require._run = True
         previous = node.check_downstream_exists(require)
+        require._run = old_run
         prev_node = None
         if previous is not None:
             prev_require, prev_node, base_previous = previous
