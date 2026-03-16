@@ -20,7 +20,7 @@ datafile = os.path.join(tmpf, "data.sqlite")
 def _mydbproc(db):
     letters = string.ascii_lowercase
     pkg_name = ''.join(random.choice(letters) for i in range(15))
-    for i in range(10):
+    for i in range(20):
         # db.list_references()
         ref = RecipeReference.loads(f"{pkg_name}/0.{i}#rev1%1")
         path = f"/random/path/{pkg_name}/{i}/folder"
@@ -40,7 +40,7 @@ def test_simple_mutex():
     pr = cProfile.Profile()
     pr.enable()
     db = CacheDatabase(datafile)
-    num_threads = 10
+    num_threads = 400
     thread_pool = ThreadPool(num_threads)
     thread_pool.map(_mydbproc, [db] * num_threads)
     thread_pool.close()
@@ -53,7 +53,7 @@ def test_simple_mutex():
     ps.print_stats()
 
 
-"""
+r"""
 ncalls  tottime  percall  cumtime  percall filename:lineno(function)
       103    0.000    0.000 1402.859   13.620 C:\ws\Python\Python312\Lib\threading.py:1117(join)
 20829/522    0.772    0.000 1402.858    2.687 {method 'acquire' of '_thread.lock' objects}

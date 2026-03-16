@@ -27,18 +27,34 @@ class BaseDbTable:
 
     @contextmanager
     def db_connection(self):
+        import time
+        limit = 8
+        t = time.time()
         if not self._lock.acquire(timeout=20):
             m = traceback.format_exc() + "\n"
             ConanOutput().error(m)
             raise ConanException("Conan failed to acquire database lock in 20s. Maybe the system is "
                                  "under very heavy load. Please report it to Github tickets")
+        diff = time.time() -t
+        is_long = False
+        if diff > limit:
+            is_long = True
+            print("Time to acquire", diff)
+        t = time.time()
         # isolation_level=None, puts it in regular SQLITE autocommit mode, every
         # connection.execute() will autocommit
         connection = sqlite3.connect(self.filename, isolation_level=None, timeout=20)
+        diff = time.time() - t
+        if is_long:
+            print("Time to connect", diff)
+        t = time.time()
         try:
             yield connection
         finally:
             connection.close()
+            diff = time.time() - t
+            if is_long:
+                print("Time to execute", diff)
             self._lock.release()
 
     def create_table(self):
