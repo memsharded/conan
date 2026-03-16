@@ -1,10 +1,11 @@
+import os
 from collections import deque
 
 from conan.internal.cache.conan_reference_layout import BasicLayout
 from conan.internal.methods import run_configure_method
 from conan.internal.model.recipe_ref import ref_matches
 from conan.internal.graph.graph import DepsGraph, Node, CONTEXT_HOST, \
-    CONTEXT_BUILD, TransitiveRequirement, RECIPE_VIRTUAL, RECIPE_EDITABLE
+    CONTEXT_BUILD, TransitiveRequirement, RECIPE_VIRTUAL, RECIPE_EDITABLE, RECIPE_CONSUMER
 from conan.internal.graph.graph import RECIPE_PLATFORM
 from conan.internal.graph.graph_error import (GraphLoopError, GraphConflictError, GraphMissingError,
                                               GraphError)
@@ -16,9 +17,11 @@ from conan.internal.model.options import Options, _PackageOptions
 from conan.internal.model.pkg_type import PackageType
 from conan.api.model import RecipeReference
 from conan.internal.model.requires import Requirement
+from conan.internal.model.version_range import VersionRange
 
 
 class DepsGraphBuilder:
+    ALLOW_ALIAS = False
 
     def __init__(self, proxy, loader, resolver, cache, remotes, update, check_update, global_conf):
         self._proxy = proxy
@@ -66,6 +69,10 @@ class DepsGraphBuilder:
         except GraphError as e:
             dep_graph.error = e
         dep_graph.resolved_ranges = self._resolver.resolved_ranges
+        refs = set(n.ref for n in dep_graph.nodes
+                   if n.recipe not in (RECIPE_VIRTUAL, RECIPE_EDITABLE, RECIPE_CONSUMER,
+                                       RECIPE_PLATFORM))
+        self._cache.update_recipes_lru(refs)
         return dep_graph
 
     def _expand_require(self, require, node, graph, profile_host, profile_build, graph_lock):
@@ -214,6 +221,8 @@ class DepsGraphBuilder:
             result.append(require)
             alias = require.alias  # alias needs to be processed this early
             if alias is not None:
+                if not DepsGraphBuilder.ALLOW_ALIAS and os.getenv("CONAN_ALLOW_ALIAS") != "will_break_next":
+                    raise ConanException(f"Alias requirements have been removed: '{node}' requiring: '{alias}'")
                 resolved = False
                 if graph_lock is not None:
                     resolved = graph_lock.replace_alias(require, alias)
@@ -222,7 +231,7 @@ class DepsGraphBuilder:
                     self._resolve_alias(node, require, alias, graph)
             self._resolve_replace_requires(node, require, profile_build, profile_host, graph)
             if graph_lock:
-                graph_lock.resolve_overrides(require)
+                graph_lock.resolve_overrides(require, node.context)
             node.transitive_deps[require] = TransitiveRequirement(require, node=None)
         return result
 
@@ -294,12 +303,13 @@ class DepsGraphBuilder:
                     if version_range:
                         if version_range.contains(d.version, resolve_prereleases):
                             require.ref.version = d.version  # resolved range is replaced by exact
+                            require.ref.revision = d.revision or "platform"
                             layout = BasicLayout(require.ref, None)
                             return layout, ConanFile(str(d)), RECIPE_PLATFORM, None
                     elif require.ref.version == d.version:
                         if d.revision is None or require.ref.revision is None or \
                                 d.revision == require.ref.revision:
-                            require.ref.revision = d.revision
+                            require.ref.revision = d.revision or "platform"
                             layout = BasicLayout(require.ref, None)
                             return layout, ConanFile(str(d)), RECIPE_PLATFORM, None
 
@@ -314,8 +324,19 @@ class DepsGraphBuilder:
                 continue  # no match in name
             if pattern.version != "*":  # we need to check versions
                 rrange = require.version_range
-                valid = rrange.contains(pattern.version, self._resolve_prereleases) if rrange else \
-                    require.ref.version == pattern.version
+                # Is the version pattern a range itself?
+                pversion = repr(pattern.version)
+                if pversion[0] == "[" and pversion[-1] == "]":
+                    prange = VersionRange(pversion[1:-1])
+                    if rrange:
+                        valid = prange.intersection(rrange) is not None
+                    else:
+                        valid = prange.contains(require.ref.version, self._resolve_prereleases)
+                else:
+                    if rrange:
+                        valid = rrange.contains(pattern.version, self._resolve_prereleases)
+                    else:
+                        valid = require.ref.version == pattern.version
                 if not valid:
                     continue
             if pattern.user != "*" and pattern.user != require.ref.user:
@@ -353,8 +374,7 @@ class DepsGraphBuilder:
                 ref.name = tracking_ref[1][:-1]  # Remove the trailing >
             req = Requirement(ref, headers=True, libs=True, visible=True)
             transitive = node.transitive_deps.get(req)
-            if transitive is None or transitive.require.ref.user != ref.user \
-                    or transitive.require.ref.channel != ref.channel:
+            if transitive is None:
                 raise ConanException(f"{node.ref} require '{ref}': didn't find a matching "
                                      "host dependency")
             require.ref.version = transitive.require.ref.version
