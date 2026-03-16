@@ -1,5 +1,8 @@
+import json
+import sys
 import textwrap
 import platform
+import pytest
 from conan.test.utils.tools import TestClient
 from conan.internal.util.files import save_files
 from conan.test.utils.test_files import temp_folder
@@ -46,6 +49,9 @@ def test_empty_pyenv():
     assert "colorama" not in c.out
     assert "Jinja2" not in c.out
     assert "PyJWT" not in c.out
+    ext = ".bat" if platform.system() == "Windows" else ".sh"
+    script = c.load(f"conan_pyenv{ext}")
+    assert "conan_pyenv" in script
 
 
 def test_build_py_manager():
@@ -76,14 +82,15 @@ def test_build_py_manager():
     client.save({"pip/conanfile.py": conanfile_pyenv})
     client.run("build pip")
 
-    print(client.out)
-
     assert "RUN: hello-world" in client.out
     assert "Hello Test World!" in client.out
 
     client.run("build pip")
     assert "Found existing installation: hello 0.1.0" in client.out
     assert "Hello Test World!" in client.out
+
+    client.run("build pip -verror")
+    assert "Found existing installation" not in client.out
 
 
 def test_install_version_range():
@@ -141,7 +148,7 @@ def test_create_py_manager():
                 PyEnv(self, self.package_folder).install(["{pip_package_folder}"])
 
             def package_info(self):
-                python_env_bin = PyEnv(self, self.package_folder).bin_dir
+                python_env_bin = PyEnv(self, self.package_folder).bin_path
                 self.buildenv_info.prepend_path("PATH", python_env_bin)
         """)
 
@@ -167,6 +174,7 @@ def test_create_py_manager():
     assert "Hello Test World!" in client.out
 
 
+@pytest.mark.skipif(sys.version_info.minor < 8, reason="UV needs Python >= 3.8")
 def test_build_uv_manager():
 
     pip_package_folder = temp_folder(path_with_spaces=True)
@@ -229,6 +237,7 @@ def test_build_uv_manager():
     assert "Hello Test World!" in client.out
 
 
+@pytest.mark.skipif(sys.version_info.minor < 8, reason="UV needs Python >= 3.8")
 def test_fail_build_uv_manager():
 
     pip_package_folder = temp_folder(path_with_spaces=True)
@@ -266,6 +275,44 @@ def test_fail_build_uv_manager():
     assert "PyEnv could not create a Python 3.11.86 virtual environment using UV" in client.out
 
 
+@pytest.mark.skipif(sys.version_info.minor > 7, reason="UV needs Python 3.7 to fail")
+def test_fail_uv_python_version():
+
+    pip_package_folder = temp_folder(path_with_spaces=True)
+    _create_py_hello_world(pip_package_folder)
+    pip_package_folder = pip_package_folder.replace('\\', '/')
+
+    conanfile_pyenv = textwrap.dedent(f"""
+        from conan import ConanFile
+        from conan.tools.system import PyEnv
+        from conan.tools.layout import basic_layout
+        import platform
+        import os
+
+
+        class PyenvPackage(ConanFile):
+            name = "pip_hello_test"
+            version = "0.1"
+
+            def layout(self):
+                basic_layout(self)
+
+            def generate(self):
+                pip_env = PyEnv(self, py_version="3.11.86")
+                pip_env.install(["{pip_package_folder}"])
+                pip_env.generate()
+
+            def build(self):
+                self.run("hello-world")
+        """)
+
+    client = TestClient(path_with_spaces=False)
+    # FIXME: the python shebang inside vitual env packages fails when using path_with_spaces
+    client.save({"pip/conanfile.py": conanfile_pyenv})
+    client.run("build pip/conanfile.py", assert_error=True)
+    assert "needs Python >= 3.8" in client.out
+
+
 def test_build_deprecated_python_manager():
     pip_package_folder = temp_folder(path_with_spaces=True)
     _create_py_hello_world(pip_package_folder)
@@ -297,3 +344,59 @@ def test_build_deprecated_python_manager():
     assert "WARN: deprecated: 'PipEnv()' is deprecated, use 'PyEnv()'" in client.out
     assert "RUN: hello-world" in client.out
     assert "Hello Test World!" in client.out
+
+
+@pytest.mark.parametrize("verbosity", ["-verror", "-vstatus"])
+def test_pyenv_install_error_always_shown(verbosity):
+    conanfile_pyenv = textwrap.dedent("""
+        from conan import ConanFile
+        from conan.tools.system import PyEnv
+
+        class PyenvPackage(ConanFile):
+            def generate(self):
+                pyenv = PyEnv(self)
+                pyenv.install(["package_does_not_exist"])
+        """)
+
+    client = TestClient(path_with_spaces=False)
+    client.save({"conanfile.py": conanfile_pyenv})
+    client.run(f"build . {verbosity}", assert_error=True)
+    assert "package_does_not_exist" in client.out
+    assert "ERROR" in client.out
+
+
+def test_cmake_toolchain_configure_find_python():
+    client = TestClient(path_with_spaces=False)
+    conanfile = textwrap.dedent("""
+        from conan import ConanFile
+        from conan.tools.cmake import CMakeToolchain
+        from conan.tools.system import PyEnv
+
+        class Pkg(ConanFile):
+            settings = "os", "arch", "compiler", "build_type"
+
+            def generate(self):
+                pyenv = PyEnv(self)
+                pyenv.generate()
+                tc = CMakeToolchain(self)
+                tc.cache_variables["Python_ROOT_DIR"] = pyenv.env_dir
+                tc.cache_variables["Python_EXECUTABLE"] = pyenv.env_exe
+                tc.cache_variables["Python_FIND_UNVERSIONED_NAMES"] = "FIRST"
+                tc.cache_variables["Python_FIND_STRATEGY"] = "LOCATION"
+                tc.cache_variables["Python_FIND_VIRTUALENV"] = "STANDARD"
+                tc.cache_variables["Python_FIND_REGISTRY"] = "NEVER"
+                tc.generate()
+        """)
+    client.save({"conanfile.py": conanfile})
+    client.run("install .")
+    presets = json.loads(client.load("CMakePresets.json"))
+    cv = presets["configurePresets"][0]["cacheVariables"]
+    assert "Python_ROOT_DIR" in cv
+    assert "Python_EXECUTABLE" in cv
+    assert "\\" not in cv["Python_ROOT_DIR"]
+    assert "\\" not in cv["Python_EXECUTABLE"]
+    assert "conan_pyenv" in cv["Python_ROOT_DIR"]
+    assert cv["Python_FIND_UNVERSIONED_NAMES"] == "FIRST"
+    assert cv["Python_FIND_STRATEGY"] == "LOCATION"
+    assert cv["Python_FIND_VIRTUALENV"] == "STANDARD"
+    assert cv["Python_FIND_REGISTRY"] == "NEVER"
