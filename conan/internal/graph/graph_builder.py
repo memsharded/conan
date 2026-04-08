@@ -191,8 +191,17 @@ class DepsGraphBuilder:
 
         # Apply build_tools_requires from profile, overriding the declared ones
         profile = profile_host if node.context == CONTEXT_HOST else profile_build
+
         for pattern, tool_requires in profile.tool_requires.items():
-            if ref_matches(ref, pattern, is_consumer=conanfile._conan_is_consumer):  # noqa
+            is_consumer = conanfile._conan_is_consumer  # noqa
+            if pattern[0] in "!~" and pattern[1] == "(":  # This is a negated OR operation
+                assert pattern[-1] == ")", (f"Malformed profile OR expression without"
+                                            f" closing parenthesis: {pattern}")
+                parts = pattern[2:-1].split("|")
+                matched = not any(ref_matches(ref, p, is_consumer=is_consumer) for p in parts)
+            else:
+                matched = ref_matches(ref, pattern, is_consumer=is_consumer)
+            if matched:
                 for tool_require in tool_requires:  # Do the override
                     # Check if it is a self-loop of build-requires in build context and avoid it
                     if ref and tool_require.name == ref.name and tool_require.user == ref.user and \
@@ -409,6 +418,8 @@ class DepsGraphBuilder:
         new_node = Node(new_ref, dep_conanfile, context=context, test=require.test or node.test)
         new_node.recipe = recipe_status
         new_node.remote = remote
+        if isinstance(layout, BasicLayout):  # Store the editable_output_folder for BinaryInstaller
+            new_node.editable_output_folder = layout.editable_output_folder
 
         down_options = self._compute_down_options(node, require, new_ref)
 
