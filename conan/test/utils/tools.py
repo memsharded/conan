@@ -205,7 +205,7 @@ class TestRequester:
             response = app.post(url, **kwargs)
             return TestingResponse(response)
         else:
-            requests.post(url, **kwargs)
+            return requests.post(url, **kwargs)
 
     def _prepare_call(self, url, kwargs):
         if not url.startswith("http://fake"):  # Call to S3 (or external), perform a real request

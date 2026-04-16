@@ -62,7 +62,8 @@ class TestServerLauncher:
 
         self.port = server_config.port
         self.ra = ConanServer(self.port, credentials_manager, authorizer, authenticator,
-                              self.server_store, server_capabilities)
+                              self.server_store, server_capabilities,
+                              sources_backup_folder=server_config.sources_backup_folder)
         for plugin in plugins:
             self.ra.api_v2.install(plugin)
 

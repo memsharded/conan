@@ -71,7 +71,9 @@ class ConanServerConfigParser(ConfigParser):
                            "custom_authenticator": get_env("CONAN_CUSTOM_AUTHENTICATOR", None, environment),
                            "custom_authorizer": get_env("CONAN_CUSTOM_AUTHORIZER", None, environment),
                            # "user:pass,user2:pass2"
-                           "users": get_env("CONAN_SERVER_USERS", None, environment)}
+                           "users": get_env("CONAN_SERVER_USERS", None, environment),
+                           "sources_backup_folder": get_env("CONAN_SOURCES_BACKUP_PATH",
+                                                            None, environment)}
 
     def _get_file_conf(self, section, varname=None):
         """ Gets the section or variable from config file.
@@ -242,6 +244,18 @@ class ConanServerConfigParser(ConfigParser):
     @property
     def jwt_expire_time(self):
         return timedelta(minutes=float(self._get_conf_server_string("jwt_expire_minutes")))
+
+
+    @property
+    def sources_backup_folder(self):
+        try:
+            path = self._get_conf_server_string("sources_backup_folder")
+            if path.startswith("."):
+                path = os.path.join(os.path.dirname(self.config_filename), path)
+                path = os.path.abspath(path)
+            return os.path.expanduser(path)
+        except ConanException:
+            return os.path.join(self.disk_storage_path, "backup_sources")
 
 
 def get_server_store(disk_storage_path, public_url):

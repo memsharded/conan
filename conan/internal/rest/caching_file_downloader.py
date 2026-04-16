@@ -28,6 +28,10 @@ class SourcesCachingDownloader:
 
     def download(self, urls, file_path,
                  retry, retry_wait, verify_ssl, auth, headers, md5, sha1, sha256):
+        server_backup = self._global_conf.get("core.sources:server_backup")
+        if server_backup and sha256:
+            self._server_proxy_download(server_backup, urls, file_path, sha256)
+            return
         download_cache_folder = self._global_conf.get("core.sources:download_cache")
         backups_urls = self._global_conf.get("core.sources:download_urls", check_type=list)
         if not (backups_urls or download_cache_folder) or not sha256:
@@ -84,6 +88,50 @@ class SourcesCachingDownloader:
             # Everything good, file in the cache, just copy it to final destination
             mkdir(os.path.dirname(file_path))
             shutil.copy2(cached_path, file_path)
+
+    def _server_proxy_download(self, server_backup, urls, file_path, sha256):
+        """Download a source file via a Conan server that acts as a pull-through cache.
+        The server fetches from the origin URL if not already cached, and streams the
+        file back. No local caching is performed; that is the server's responsibility.
+        """
+        if not isinstance(urls, (list, tuple)):
+            urls = [urls]
+        server_backup = server_backup.rstrip("/")
+        endpoint = f"{server_backup}/v2/sources/backup/{sha256}"
+        self._output.info(f"Downloading sources from backup server: {server_backup}")
+        try:
+            response = self._file_downloader._requester.post(
+                endpoint,
+                json={"urls": urls},
+                stream=True,
+                verify=True,
+                source_credentials=True,
+            )
+        except Exception as e:
+            raise ConanException(f"Error contacting source backup server '{server_backup}': {e}")
+
+        if not response.ok:
+            if response.status_code == 404:
+                raise NotFoundException(f"Sources {urls} not found in server backup "
+                                        f"'{server_backup}'")
+            elif response.status_code in (401, 403):
+                raise AuthenticationException(f"Authentication failed for source backup server "
+                                              f"'{server_backup}'")
+            raise ConanException(f"Error {response.status_code} from source backup server "
+                                 f"'{server_backup}'")
+
+        mkdir(os.path.dirname(file_path))
+        try:
+            with open(file_path, 'wb') as f:
+                for chunk in response.iter_content(chunk_size=1024 * 100):
+                    f.write(chunk)
+        except Exception as e:
+            if os.path.exists(file_path):
+                os.remove(file_path)
+            raise ConanException(f"Error streaming from source backup server: {e}")
+
+        FileDownloader.check_checksum(file_path, None, None, sha256)
+        self._output.info(f"Sources for {urls} downloaded from server backup '{server_backup}'")
 
     def _origin_download(self, urls, cached_path, retry, retry_wait,
                          verify_ssl, auth, headers, md5, sha1, sha256, is_last):

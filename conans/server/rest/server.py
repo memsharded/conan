@@ -15,7 +15,7 @@ class ConanServer(object):
     root_app = None
 
     def __init__(self, run_port, credentials_manager, authorizer, authenticator,
-                 server_store, server_capabilities):
+                 server_store, server_capabilities, sources_backup_folder=None):
 
         self.run_port = run_port
 
@@ -26,6 +26,7 @@ class ConanServer(object):
         self.api_v2.authorizer = authorizer
         self.api_v2.authenticator = authenticator
         self.api_v2.server_store = server_store
+        self.api_v2.sources_backup_folder = sources_backup_folder
         self.api_v2.setup()
         self.root_app.mount("/v2/", self.api_v2)
 

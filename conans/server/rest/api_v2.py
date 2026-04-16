@@ -5,6 +5,7 @@ from conans.server.rest.bottle_plugins.http_basic_authentication import HttpBasi
 from conans.server.rest.bottle_plugins.jwt_authentication import JWTAuthentication
 from conans.server.rest.bottle_plugins.return_handler import ReturnHandlerPlugin
 from conans.server.rest.controller.v2.ping import PingController
+from conans.server.rest.controller.v2.sources import SourcesController
 from conans.server.rest.controller.v2.users import UsersController
 from conans.server.rest.controller.v2.conan import ConanControllerV2
 from conans.server.rest.controller.v2.delete import DeleteControllerV2
@@ -26,6 +27,7 @@ class ApiV2(Bottle):
         # Capabilities in a ping
         PingController().attach_to(self)
 
+        SourcesController().attach_to(self)
         SearchControllerV2().attach_to(self)
         DeleteControllerV2().attach_to(self)
         ConanControllerV2().attach_to(self)
