@@ -11,8 +11,12 @@ from conan.internal.util.files import check_with_algorithm_sum
 
 class SourcesService:
 
-    def __init__(self, backup_folder):
+    def __init__(self, backup_folder, download_fn=None):
         self._cache = DownloadCache(backup_folder)
+        # Callable with the same interface as requests.get(url, stream=True).
+        # Overridable in tests so that fake-URL file servers can be used without
+        # a real HTTP server.
+        self._download_fn = download_fn or (lambda url, **kw: requests.get(url, **kw))
 
     def get_source(self, sha256, urls):
         cached_path = self._cache.source_path(sha256)
@@ -28,13 +32,14 @@ class SourcesService:
         # (potentially long) origin download.
         return self._stream_and_cache(sha256, cached_path, urls)
 
-    @staticmethod
-    def _stream_and_cache(sha256, cached_path, urls):
+    def _stream_and_cache(self, sha256, cached_path, urls):
         """Return a generator that fetches from the first working origin URL,
         streams each chunk to the caller, and simultaneously writes to the
         server-side cache.  The dirty marker keeps the cache consistent if the
         download or sha256 check fails mid-stream.
         """
+        download_fn = self._download_fn
+
         def generator():
             mkdir(os.path.dirname(cached_path))
             with set_dirty_context_manager(cached_path):
@@ -42,7 +47,7 @@ class SourcesService:
                 last_error = None
                 for url in urls:
                     try:
-                        r = requests.get(url, stream=True)
+                        r = download_fn(url, stream=True)
                         r.raise_for_status()
                         response = r
                         break
