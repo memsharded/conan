@@ -902,3 +902,26 @@ def test_option_apply_version_range():
     assert "WARN: risk" not in c.out
     # This failed because of dep/[*] not matching pattern, now it works
     assert "Install finished successfully" in c.out
+
+
+class TestTestRequires:
+    def test_build_requires_options_different(self):
+        c = TestClient()
+
+        dep = GenConanfile("dep", "0.1").with_option("myoption", [1, 2, 3, 4], default=1)
+        pkga = (GenConanfile("pkga", "0.1").with_test_requirement("dep/0.1",
+                                                                  options={"myoption": 2}))
+        pkgb = (GenConanfile("pkgb", "0.1").with_test_requirement("dep/0.1",
+                                                                  options={"myoption": 3}))
+        app = (GenConanfile().with_requires("pkga/0.1", "pkgb/0.1")
+                             .with_default_option("*:myoption", 4))
+        c.save({"dep/conanfile.py": dep,
+                "pkga/conanfile.py": pkga,
+                "pkgb/conanfile.py": pkgb,
+                "app/conanfile.py": app})
+
+        c.run("export dep")
+        c.run("export pkga")
+        c.run("export pkgb")
+        c.run("graph info app --format=html", redirect_stdout="graph.html")
+        c.open("graph.html")
