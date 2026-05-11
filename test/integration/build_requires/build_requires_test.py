@@ -859,6 +859,23 @@ def test():
                     save(self, f"bin/my{self.name}.sh", echo + "\n myopenssl.sh")
                     os.chmod(f"bin/my{self.name}.sh", 0o777)
             """)
+    tool2 = textwrap.dedent(r"""
+            import os
+            from conan import ConanFile
+            from conan.tools.files import save, chdir
+            class Pkg(ConanFile):
+                type = "application"
+                settings = "os", "build_type"
+                def requirements(self):
+                    self.requires("openssl/2.0")
+
+                def package(self):
+                    with chdir(self, self.package_folder):
+                        echo = "@echo off\necho {}={}!!".format(self.name, self.settings.build_type)
+                        save(self, f"bin/my{self.name}.bat", echo + "\ncall myopenssl.bat")
+                        save(self, f"bin/my{self.name}.sh", echo + "\n myopenssl.sh")
+                        os.chmod(f"bin/my{self.name}.sh", 0o777)
+                """)
     consumer = textwrap.dedent(r"""
         import os
         from conan import ConanFile
@@ -874,12 +891,14 @@ def test():
 
     c = TestClient()
     c.save({"tool/conanfile.py": tool,
+            "tool2/conanfile.py": tool2,
             "openssl/conanfile.py": openssl,
             "consumer/conanfile.py": consumer})
 
     c.run("create openssl --name=openssl --version=1.0")
+    c.run("create openssl --name=openssl --version=2.0")
     c.run("create tool --name=tool1 --version=1.0")
-    c.run("create tool --name=tool2 --version=1.0")
+    c.run("create tool2 --name=tool2 --version=1.0")
 
     c.run("graph info consumer --build=missing --format=html", redirect_stdout="graph.html")
     c.open("graph.html")
