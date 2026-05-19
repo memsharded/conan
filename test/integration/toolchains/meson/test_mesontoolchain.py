@@ -222,7 +222,7 @@ def test_custom_arch_flag_via_toolchain():
             tc.generate()
     """)
     t.save({"conanfile.py": conanfile})
-    t.run("install .")
+    t.run('install . -c tools.microsoft.msbuild:installation_path=""')
     content = t.load(MesonToolchain.native_filename)
     assert re.search(r"c_args =.+-mmy-flag.+", content)
     assert re.search(r"c_link_args =.+-mmy-flag.+", content)
@@ -320,7 +320,7 @@ def test_deactivate_nowrap():
                 tc.generate()
         """)
     t.save({"conanfile.py": conanfile})
-    t.run("install .")
+    t.run('install . -c tools.microsoft.msbuild:installation_path=""')
     content = t.load(MesonToolchain.native_filename)
     assert "wrap_mode " not in content
     assert "nofallback" not in content
@@ -346,6 +346,7 @@ def test_clang_cl_vscrt(build_type, runtime, vscrt):
 
         [conf]
         tools.cmake.cmaketoolchain:generator=Visual Studio 17
+        tools.microsoft.msbuild:installation_path=
 
         [buildenv]
         CC=clang-cl
@@ -397,7 +398,8 @@ def test_env_vars_from_build_require():
     """)
     # Now, let's check how all the build env variables are applied at consumer side
     client.save({"conanfile.py": conanfile})
-    client.run("install . -pr:h=default -pr:b=default")
+    client.run('install . -pr:h=default -pr:b=default '
+               '-c tools.microsoft.msbuild:installation_path=""')
     content = client.load("conan_meson_native.ini")
     assert "c = 'CC_VALUE'" in content
     assert "cpp = 'CXX_VALUE'" in content
@@ -443,7 +445,7 @@ def test_check_pkg_config_paths():
     # Issue: https://github.com/conan-io/conan/issues/14935
     t = TestClient()
     t.save({"conanfile.txt": "[generators]\nMesonToolchain"})
-    t.run("install .")
+    t.run('install . -c tools.microsoft.msbuild:installation_path=""')
     content = t.load(MesonToolchain.native_filename)
     assert f"pkg_config_path = '{t.current_folder}'" in content
     assert f"build.pkg_config_path = " not in content
@@ -459,7 +461,8 @@ def test_check_pkg_config_paths():
             tc.generate()
     """)
     t.save({"conanfile.py": conanfile}, clean_first=True)
-    t.run("install .")
+    t.run("install . "
+          '-c tools.microsoft.msbuild:installation_path=""')
     content = t.load(MesonToolchain.native_filename)
     base_folder = t.current_folder
     assert f"pkg_config_path = '{base_folder}'" in content
@@ -563,7 +566,7 @@ def test_subproject_options():
                 tc.generate()
         """)
     t.save({"conanfile.py": conanfile})
-    t.run("install .")
+    t.run('install . -c tools.microsoft.msbuild:installation_path=""')
     content = t.load(MesonToolchain.native_filename)
     assert "[subproject1:project options]" in content
     assert "[subproject2:project options]" in content
@@ -667,7 +670,7 @@ def test_native_attribute_error():
             tc.generate()
     """)
     client.save({"conanfile.py": conanfile})
-    client.run("install .", assert_error=True)
+    client.run('install . -c tools.microsoft.msbuild:installation_path=""', assert_error=True)
     assert "You can only pass native=True if you're cross-building" in client.out
 
 
@@ -742,7 +745,8 @@ def test_cross_x86_64_to_x86():
 
     c = TestClient()
     c.save({"conanfile.py": GenConanfile().with_settings("os", "compiler", "arch", "build_type")})
-    c.run("install . -g MesonToolchain -s arch=x86 -s:b arch=x86_64")
+    c.run("install . -g MesonToolchain -s arch=x86 -s:b arch=x86_64 "
+          '-c tools.microsoft.msbuild:installation_path=""')
     assert not os.path.exists(os.path.join(c.current_folder, MesonToolchain.native_filename))
     cross = c.load(MesonToolchain.cross_filename)
     assert "cpu = 'x86_64'" in cross  # This is the build machine

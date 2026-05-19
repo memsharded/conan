@@ -22,7 +22,8 @@ from conan.test.utils.tools import TestClient
 def test_msbuilddeps_maps_architecture_to_platform(arch, exp_platform):
     client = TestClient()
     client.run("new msbuild_lib -d name=hello -d version=0.1")
-    client.run(f"install . -g MSBuildDeps -s arch={arch} -pr:b=default")
+    client.run(f"install . -g MSBuildDeps -s arch={arch} -pr:b=default "
+               '-c tools.microsoft.msbuild:installation_path=""')
     toolchain = client.load(os.path.join("conan", "conantoolchain.props"))
     expected_import = f"""<Import Condition="'$(Configuration)' == 'Release' And '$(Platform)' == '{exp_platform}'" Project="conantoolchain_release_{exp_platform.lower()}.props"/>"""
     assert expected_import in toolchain

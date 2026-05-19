@@ -26,7 +26,7 @@ def test_msbuildtoolchain_props_with_extra_flags():
         "myprofile": profile
     })
     # Local flow works
-    client.run("install . -pr myprofile")
+    client.run('install . -pr myprofile -c tools.microsoft.msbuild:installation_path=""')
     toolchain = client.load(os.path.join("conan", "conantoolchain_release_x64.props"))
     expected_cl_compile = """
     <ClCompile>
@@ -57,7 +57,7 @@ def test_msbuildtoolchain_rcflags():
     client = TestClient()
     client.run("new msbuild_lib -d name=hello -d version=0.1")
     client.save({"myprofile": profile})
-    client.run("install . -pr myprofile")
+    client.run('install . -pr myprofile -c tools.microsoft.msbuild:installation_path=""')
     toolchain = client.load(os.path.join("conan", "conantoolchain_release_x64.props"))
     expected_resource_compile = ("<AdditionalOptions>/flag-rc1 /flag-rc2 %(AdditionalOptions)"
                                  "</AdditionalOptions>")

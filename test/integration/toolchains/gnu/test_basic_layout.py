@@ -24,7 +24,7 @@ def test_basic_layout_subproject(basic_layout, expected_path):
                 {basic_layout}
         """)
     c.save({"pkg/conanfile.py": conanfile})
-    c.run("install pkg")
+    c.run('install pkg -c tools.microsoft.msbuild:installation_path=""')
     ext = "sh" if platform.system() != "Windows" else "bat"
     assert os.path.isfile(os.path.join(c.current_folder, "pkg", expected_path, "conan",
                                        "conanautotoolstoolchain.{}".format(ext)))

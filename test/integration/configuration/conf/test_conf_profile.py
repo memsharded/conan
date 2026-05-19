@@ -179,6 +179,7 @@ def test_msbuild_compile_options():
         compiler.runtime=dynamic
         build_type=Release
         [conf]
+        tools.microsoft.msbuild:installation_path=
         tools.microsoft.msbuildtoolchain:compile_options={"ExceptionHandling": "Async"}
         """)
     client.save({"myprofile": profile})

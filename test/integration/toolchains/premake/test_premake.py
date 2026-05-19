@@ -117,6 +117,8 @@ def test_premake_msbuild_platform():
         compiler.runtime=dynamic
         compiler.version=194
         os=Windows
+        [conf]
+        tools.microsoft.msbuild:installation_path=
     """)
 
     conanfile = textwrap.dedent(

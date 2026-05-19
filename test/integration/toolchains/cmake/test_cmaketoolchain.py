@@ -395,7 +395,8 @@ def test_runtime_lib_dirs_single_conf(lib_dir_setup):
     if is_windows:
         generator = '-c tools.cmake.cmaketoolchain:generator=Ninja'
 
-    client.run(f'install . -s build_type=Release {generator}')
+    client.run(f'install . -s build_type=Release {generator} '
+               f'-c tools.microsoft.msbuild:installation_path=""')
     contents = client.load("conan_toolchain.cmake")
     pattern_lib_path = r'list\(PREPEND CMAKE_LIBRARY_PATH (.*)\)'
     pattern_lib_dirs = r'set\(CONAN_RUNTIME_LIB_DIRS (.*) \)'
@@ -825,7 +826,9 @@ def test_toolchain_cache_variables():
     with mock.patch("platform.system", mock.MagicMock(return_value="Windows")):
         client.run("install . --name=mylib --version=1.0 "
                    "-c tools.cmake.cmaketoolchain:generator='MinGW Makefiles' "
-                   "-c tools.gnu:make_program='MyMake' -c tools.build:skip_test=True")
+                   "-c tools.gnu:make_program='MyMake' -c tools.build:skip_test=True "
+                   '-c test_toolchain_cache_variables="" '
+                   '-c tools.microsoft.msbuild:installation_path=""')
 
     presets = json.loads(client.load("CMakePresets.json"))
     cache_variables = presets["configurePresets"][0]["cacheVariables"]
@@ -848,7 +851,8 @@ def test_toolchain_cache_variables():
     assert "-DCMAKE_TOOLCHAIN_FILE=" in client.out
     assert f"-G {_format_val('MinGW Makefiles')}" in client.out
 
-    client.run("install . --name=mylib --version=1.0 -c tools.gnu:make_program='MyMake'")
+    client.run("install . --name=mylib --version=1.0 -c tools.gnu:make_program='MyMake' "
+               '-c tools.microsoft.msbuild:installation_path=""')
     presets = json.loads(client.load("CMakePresets.json"))
     cache_variables = presets["configurePresets"][0]["cacheVariables"]
     assert cache_variables["CMAKE_MAKE_PROGRAM"] == "MyMake"
@@ -1019,7 +1023,8 @@ def test_presets_ninja_msvc(arch, arch_toolset):
     client.save({"conanfile.py": conanfile, "CMakeLists.txt": "foo"})
     configs = ["-c tools.cmake.cmaketoolchain:toolset_arch={}".format(arch_toolset),
                "-c tools.cmake.cmake_layout:build_folder_vars='[\"settings.compiler.cppstd\"]'",
-               "-c tools.cmake.cmaketoolchain:generator=Ninja"]
+               "-c tools.cmake.cmaketoolchain:generator=Ninja",
+               '-c tools.microsoft.msbuild:installation_path=""']
     msvc = " -s compiler=msvc -s compiler.version=191 -s compiler.runtime=static " \
            "-s compiler.runtime_type=Release"
     client.run("install . {} -s compiler.cppstd=14 {} -s arch={}".format(" ".join(configs), msvc, arch))
@@ -1050,7 +1055,8 @@ def test_presets_ninja_msvc(arch, arch_toolset):
 
     rmdir(os.path.join(client.current_folder, "build"))
     configs = ["-c tools.cmake.cmake_layout:build_folder_vars='[\"settings.compiler.cppstd\"]'",
-               "-c tools.cmake.cmaketoolchain:generator=Ninja"]
+               "-c tools.cmake.cmaketoolchain:generator=Ninja",
+               '-c tools.microsoft.msbuild:installation_path=""']
 
     client.run(
         "install . {} -s compiler.cppstd=14 {} -s arch={}".format(" ".join(configs), msvc, arch))

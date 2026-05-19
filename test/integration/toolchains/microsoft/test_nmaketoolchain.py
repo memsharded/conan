@@ -16,6 +16,7 @@ def test_nmaketoolchain_rcflags():
         arch=x86_64
         [conf]
         tools.build:rcflags=["/nologo", "/flag-rc1"]
+        tools.microsoft.msbuild:installation_path=
         """)
     client = TestClient()
     conanfile = GenConanfile().with_settings("os", "arch", "compiler", "build_type").with_generator("NMakeToolchain")

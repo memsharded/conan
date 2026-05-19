@@ -18,7 +18,7 @@ def test_vs_layout_subproject():
                 vs_layout(self)
         """)
     c.save({"pkg/conanfile.py": conanfile})
-    c.run("install pkg")
+    c.run('install pkg -c tools.microsoft.msbuild:installation_path=""')
     assert os.path.isfile(os.path.join(c.current_folder, "pkg", "conan", "conantoolchain.props"))
 
 

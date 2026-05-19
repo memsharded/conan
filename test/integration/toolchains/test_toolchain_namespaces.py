@@ -26,12 +26,12 @@ def test_autotools_namespace():
             """.format(namespace))
 
     client.save({"conanfile.py": conanfile})
-    client.run("install .")
+    client.run('install . -c tools.microsoft.msbuild:installation_path=""')
     assert os.path.isfile(os.path.join(client.current_folder,
                                        "{}_{}".format(namespace, CONAN_TOOLCHAIN_ARGS_FILE)))
     content = load_toolchain_args(generators_folder=client.current_folder, namespace=namespace)
     at_configure_args = content.get("configure_args")
     at_make_args = content.get("make_args")
-    client.run("build .")
+    client.run('build . -c tools.microsoft.msbuild:installation_path=""')
     assert at_configure_args in client.out
     assert at_make_args in client.out
