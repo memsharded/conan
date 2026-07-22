@@ -1262,6 +1262,66 @@ def test_cmake_toolchain_ninja_multi_config():
 
 
 @pytest.mark.tool("cmake")
+def test_cmake_toolchain_define_with_generator_expression_char():
+    # https://github.com/conan-io/conan/issues/15926#issuecomment-5035172853
+    # A '>' inside a define value must not be interpreted by CMake as the
+    # end of the generator expression that CMakeToolchain wraps around it.
+    client = TestClient(path_with_spaces=False)
+    profile = textwrap.dedent(r"""
+        include(default)
+        [conf]
+        tools.build:defines=["MYVAR1=abc@123", "MYVAR2=abc<123", "MYVAR3=abc>123", "MYVAR4=abc$123"]
+        tools.build:defines+=["MYVAR5=abc$<123", "MYVAR6=abc$<>123"]
+    """)
+
+    conanfile = textwrap.dedent(r'''
+        from conan import ConanFile
+        from conan.tools.cmake import CMake, CMakeToolchain, cmake_layout
+
+        class Test(ConanFile):
+            settings = "os", "compiler", "arch", "build_type"
+            generators = "CMakeToolchain"
+
+            def build(self):
+                cmake = CMake(self)
+                cmake.configure()
+                cmake.build()
+        ''')
+
+    main = textwrap.dedent(r"""
+        #include <stdio.h>
+        #define STR(x)   #x
+        #define SHOW_DEFINE(x) printf("DEFINE %s=[%s]!\n", #x, STR(x))
+        int main() {
+            SHOW_DEFINE(MYVAR1);SHOW_DEFINE(MYVAR2);SHOW_DEFINE(MYVAR3);SHOW_DEFINE(MYVAR4);
+            SHOW_DEFINE(MYVAR5);SHOW_DEFINE(MYVAR6);
+            return 0;
+        }
+        """)
+
+    cmakelists = textwrap.dedent("""
+        set(CMAKE_CXX_COMPILER_WORKS 1)
+        set(CMAKE_CXX_ABI_COMPILED 1)
+        cmake_minimum_required(VERSION 3.15)
+        project(Test CXX)
+        add_executable(example src/main.cpp)
+        """)
+
+    client.save({"conanfile.py": conanfile, "profile": profile,
+                 "src/main.cpp": main, "CMakeLists.txt": cmakelists}, clean_first=True)
+    client.run("build . -pr=./profile")
+    exe = "Release/example" if platform.system() != "Windows" else r"Release\example.exe"
+    client.run_command(exe)
+    print(client.out)
+    assert 'DEFINE MYVAR1=[abc@123]!' in client.out
+    assert 'DEFINE MYVAR2=[abc<123]!' in client.out
+    assert 'DEFINE MYVAR3=[abc>123]!' in client.out
+    assert 'DEFINE MYVAR4=[abc$123]!' in client.out
+    assert 'DEFINE MYVAR5=[abc$<123]!' in client.out
+    assert 'DEFINE MYVAR6=[abc$<>123]!' in client.out
+
+
+@pytest.mark.tool("cmake")
 @pytest.mark.skipif(platform.system() != "Darwin", reason="Only needs to run once, no need for extra platforms")
 def test_cxx_version_not_overriden_if_hardcoded():
     """Any C++ standard set in the CMakeLists.txt will have priority even if the

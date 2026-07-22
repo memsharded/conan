@@ -12,7 +12,7 @@ from conan.tools.build import build_jobs
 from conan.tools.build.flags import architecture_flag, architecture_link_flag, libcxx_flags, threads_flags
 from conan.tools.build.cross_building import cross_building
 from conan.tools.cmake.toolchain import CONAN_TOOLCHAIN_FILENAME
-from conan.tools.cmake.utils import is_multi_configuration
+from conan.tools.cmake.utils import is_multi_configuration, cmake_escape_value
 from conan.tools.intel import IntelCC
 from conan.tools.intel.intel_cc import intel_cc_compilers
 from conan.tools.microsoft.visual import msvc_version_to_toolset_version, msvc_platform_from_arch
@@ -871,7 +871,7 @@ class ExtraFlagsBlock(Block):
             "sharedlinkflags": sharedlinkflags,
             "exelinkflags": exelinkflags,
             "rcflags": rcflags,
-            "defines": [define.replace('"', '\\"') for define in defines],
+            "defines": [cmake_escape_value(d) for d in defines],
         }
 
 
