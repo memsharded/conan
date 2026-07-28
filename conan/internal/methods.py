@@ -2,7 +2,7 @@ import os
 
 from conan.api.output import ConanOutput
 from conan.errors import ConanException
-from conan.internal.errors import conanfile_exception_formatter, conanfile_remove_attr
+from conan.internal.errors import call_method, conanfile_exception_formatter, conanfile_remove_attr
 from conan.internal.paths import CONANINFO
 from conan.internal.model.manifest import FileTreeManifest
 from conan.api.model import PkgReference
@@ -94,8 +94,7 @@ def run_configure_method(conanfile, down_options, profile_options, ref):
     initial_requires_count = len(conanfile.requires)
 
     if hasattr(conanfile, "config_options"):
-        with conanfile_exception_formatter(conanfile, "config_options"):
-            conanfile.config_options()
+        call_method(conanfile, "config_options")
     elif "auto_shared_fpic" in conanfile.implements:
         auto_shared_fpic_config_options(conanfile)
 
@@ -106,8 +105,7 @@ def run_configure_method(conanfile, down_options, profile_options, ref):
     conanfile.options.apply_downstream(down_options, profile_options, ref, is_consumer)
 
     if hasattr(conanfile, "configure"):
-        with conanfile_exception_formatter(conanfile, "configure"):
-            conanfile.configure()
+        call_method(conanfile, "configure")
     elif "auto_shared_fpic" in conanfile.implements:
         auto_shared_fpic_configure(conanfile)
 
@@ -131,12 +129,10 @@ def run_configure_method(conanfile, down_options, profile_options, ref):
     conanfile.tool_requires = ToolRequirements(conanfile.requires)
 
     if hasattr(conanfile, "requirements"):
-        with conanfile_exception_formatter(conanfile, "requirements"):
-            conanfile.requirements()
+        call_method(conanfile, "requirements")
 
     if hasattr(conanfile, "build_requirements"):
-        with conanfile_exception_formatter(conanfile, "build_requirements"):
-            conanfile.build_requirements()
+        call_method(conanfile, "build_requirements")
 
     if conanfile.build_requires._called:  # noqa
         conanfile.output.warning(

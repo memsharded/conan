@@ -6,7 +6,7 @@ import traceback
 from conan.api.output import ConanOutput
 from conan.errors import ConanException
 from conan.internal.cache.home_paths import HomePaths
-from conan.internal.errors import conanfile_exception_formatter
+from conan.internal.errors import call_method
 from conan.internal.util.files import mkdir, chdir
 
 
@@ -126,8 +126,7 @@ def write_generators(conanfile, hook_manager, home_folder, envs_generation=None)
         conanfile.output.highlight("Calling generate() method in recipe")
         mkdir(new_gen_folder)
         with chdir(new_gen_folder):
-            with conanfile_exception_formatter(conanfile, "generate"):
-                conanfile.generate()
+            call_method(conanfile, "generate")
 
     if envs_generation is None:
         if conanfile.virtualbuildenv:

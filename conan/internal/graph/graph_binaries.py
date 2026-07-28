@@ -11,7 +11,7 @@ from conan.internal.graph.graph import (BINARY_BUILD, BINARY_CACHE, BINARY_DOWNL
                                         BINARY_INVALID, BINARY_EDITABLE_BUILD, RECIPE_PLATFORM,
                                         BINARY_PLATFORM)
 from conan.internal.graph.proxy import should_update_reference
-from conan.internal.errors import (conanfile_exception_formatter, ConanConnectionError,
+from conan.internal.errors import (call_method, ConanConnectionError,
                                    NotFoundException, PackageNotFoundException)
 from conan.errors import ConanException
 from conan.internal.model.conanconfig import loadconanconfig
@@ -461,8 +461,7 @@ class GraphBinariesAnalyzer:
         # package_id, we can run it
         conanfile = node.conanfile
         if hasattr(conanfile, "layout"):
-            with conanfile_exception_formatter(conanfile, "layout"):
-                conanfile.layout()
+            call_method(conanfile, "layout")
 
     def evaluate_graph(self, deps_graph, build_mode, lockfile, remotes, update, build_mode_test=None,
                        tested_graph=None):
@@ -524,8 +523,7 @@ class GraphBinariesAnalyzer:
                 compute_package_id(node, self._modes, config_version, self._hook_manager)
             # To support the ``[layout]`` in conanfile.txt
             if hasattr(node.conanfile, "layout"):
-                with conanfile_exception_formatter(node.conanfile, "layout"):
-                    node.conanfile.layout()
+                call_method(node.conanfile, "layout")
 
         self._skip_binaries(deps_graph)
 

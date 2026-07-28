@@ -26,6 +26,11 @@ def conanfile_remove_attr(conanfile, names, method):
         conanfile.__class__ = original_class
 
 
+def call_method(conanfile, method):
+    with conanfile_exception_formatter(conanfile, method):
+        getattr(conanfile, method)()
+
+
 @contextmanager
 def conanfile_exception_formatter(conanfile, funcname):
     """

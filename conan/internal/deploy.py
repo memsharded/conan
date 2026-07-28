@@ -6,7 +6,7 @@ import fnmatch
 from conan.internal.cache.home_paths import HomePaths
 from conan.api.output import ConanOutput
 from conan.internal.loader import load_python_file
-from conan.internal.errors import conanfile_exception_formatter
+from conan.internal.errors import call_method
 from conan.errors import ConanException
 from conan.internal.util.files import rmdir, mkdir, save
 
@@ -68,8 +68,7 @@ def do_deploys(home_folder, graph, deploy, deploy_package, deploy_folder):
             if hasattr(conanfile, "deploy"):
                 conanfile.output.info("Executing deploy()")
                 conanfile.deploy_folder = deploy_folder
-                with conanfile_exception_formatter(conanfile, "deploy"):
-                    conanfile.deploy()
+                call_method(conanfile, "deploy")
     # Handle the deploys
     cache = HomePaths(home_folder)
     for d in deploy or []:

@@ -15,7 +15,7 @@ from conan.errors import ConanException
 from pathlib import Path
 from conan.internal.model.profile import Profile
 from conan.internal.model.version import Version
-from conan.internal.errors import conanfile_exception_formatter
+from conan.internal.errors import call_method
 from conan.internal.graph.graph import CONTEXT_HOST
 from conan.internal.graph.profile_node_definer import initialize_conanfile_profile
 from conan.internal.runner.output import RunnerOutput
@@ -261,8 +261,7 @@ class DockerRunner:
         # In this case, mount the root folder as the base path and update the abs_docker_path to the
         # new relative path
         if hasattr(conanfile, "layout"):
-            with conanfile_exception_formatter(conanfile, "layout"):
-                conanfile.layout()
+            call_method(conanfile, "layout")
             if conanfile.folders.root:
                 abs_path = self._get_abs_host_path(conanfile.folders.root)
                 if self.abs_host_path.is_relative_to(abs_path):

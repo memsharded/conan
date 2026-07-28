@@ -10,7 +10,7 @@ from conan.internal.graph.graph import (BINARY_BUILD, BINARY_CACHE, BINARY_DOWNL
                                         BINARY_SKIP)
 from conan.internal.graph.install_graph import InstallGraph
 from conan.internal.source import retrieve_exports_sources, config_source
-from conan.internal.errors import conanfile_remove_attr, conanfile_exception_formatter
+from conan.internal.errors import call_method, conanfile_remove_attr, conanfile_exception_formatter
 from conan.errors import ConanException
 from conan.internal.model.cpp_info import CppInfo, MockInfoProperty
 from conan.api.model import PkgReference
@@ -25,8 +25,7 @@ def build_id(conan_file):
         build_id_info = conan_file.info.clone()
         conan_file.info_build = build_id_info
         # effectively call the user function to change the package values
-        with conanfile_exception_formatter(conan_file, "build_id"):
-            conan_file.build_id()
+        call_method(conan_file, "build_id")
         # compute modified ID
         return build_id_info.package_id()
     return None
@@ -207,8 +206,7 @@ class BinaryInstaller:
             if hasattr(cfile, "build_system_requirements"):
                 cfile._conan_build_system_requirements = True  # noqa
                 try:
-                    with conanfile_exception_formatter(cfile, "build_system_requirements"):
-                        cfile.build_system_requirements()
+                    call_method(cfile, "build_system_requirements")
                 finally:
                     del cfile._conan_build_system_requirements  # noqa
 
@@ -222,8 +220,7 @@ class BinaryInstaller:
                     if only_info and mode is None:
                         continue
                     if hasattr(conanfile, "system_requirements"):
-                        with conanfile_exception_formatter(conanfile, "system_requirements"):
-                            conanfile.system_requirements()
+                        call_method(conanfile, "system_requirements")
                     if package.binary == BINARY_BUILD:
                         _install_build(conanfile)
                     for n in package.nodes:
@@ -234,8 +231,7 @@ class BinaryInstaller:
         if only_info and mode is None:
             return
         if hasattr(conanfile, "system_requirements"):
-            with conanfile_exception_formatter(conanfile, "system_requirements"):
-                conanfile.system_requirements()
+            call_method(conanfile, "system_requirements")
         _install_build(conanfile)
 
     def install_sources(self, graph, remotes):

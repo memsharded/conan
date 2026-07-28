@@ -5,7 +5,7 @@ from conan.cli import make_abs_path
 from conan.internal.methods import run_build_method, run_source_method
 from conan.internal.graph.graph import CONTEXT_HOST
 from conan.internal.graph.profile_node_definer import initialize_conanfile_profile
-from conan.internal.errors import conanfile_exception_formatter
+from conan.internal.errors import call_method, conanfile_exception_formatter
 from conan.errors import ConanException
 from conan.api.model import RecipeReference, Remote
 from conan.internal.util.files import chdir
@@ -124,8 +124,7 @@ class LocalAPI:
         initialize_conanfile_profile(conanfile, profile, profile, CONTEXT_HOST, False)
         # This is important, otherwise the ``conan source`` doesn't define layout and fails
         if hasattr(conanfile, "layout"):
-            with conanfile_exception_formatter(conanfile, "layout"):
-                conanfile.layout()
+            call_method(conanfile, "layout")
 
         folder = conanfile.recipe_folder if conanfile.folders.root is None else \
             os.path.normpath(os.path.join(conanfile.recipe_folder, conanfile.folders.root))

@@ -10,7 +10,7 @@ from conan.api.output import ConanOutput
 from conan.cli import make_abs_path
 from conan.cli.printers.graph import print_graph_basic, print_graph_packages
 from conan.errors import ConanException
-from conan.internal.errors import conanfile_exception_formatter
+from conan.internal.errors import call_method
 from conan.internal.graph.install_graph import ProfileArgs
 from conan.internal.methods import auto_language, auto_shared_fpic_config_options, \
     auto_shared_fpic_configure
@@ -294,8 +294,7 @@ class WorkspaceAPI:
     @staticmethod
     def _init_options(conanfile, options):
         if hasattr(conanfile, "config_options"):
-            with conanfile_exception_formatter(conanfile, "config_options"):
-                conanfile.config_options()
+            call_method(conanfile, "config_options")
         elif "auto_shared_fpic" in conanfile.implements:
             auto_shared_fpic_config_options(conanfile)
 
@@ -305,8 +304,7 @@ class WorkspaceAPI:
         conanfile.options.apply_downstream(Options(), options, None, True)
 
         if hasattr(conanfile, "configure"):
-            with conanfile_exception_formatter(conanfile, "configure"):
-                conanfile.configure()
+            call_method(conanfile, "configure")
         elif "auto_shared_fpic" in conanfile.implements:
             auto_shared_fpic_configure(conanfile)
 
@@ -324,8 +322,7 @@ class WorkspaceAPI:
             for node in items:
                 conanfile = node.conanfile
                 if hasattr(conanfile, "layout"):
-                    with conanfile_exception_formatter(conanfile, "layout"):
-                        conanfile.layout()
+                    call_method(conanfile, "layout")
                 base_folder = find_folder(node.ref)
                 src_folder = os.path.normpath(os.path.join(base_folder, conanfile.folders.source))
                 level_order.append({"ref": node.ref, "folder": src_folder.replace("\\", "/")})

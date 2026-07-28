@@ -5,7 +5,7 @@ from io import StringIO
 from conan.api.output import ConanOutput
 from conan.errors import ConanException
 from conan.api.model import RecipeReference
-from conan.internal.errors import conanfile_exception_formatter
+from conan.internal.errors import call_method
 from conan.internal.graph.graph import CONTEXT_HOST
 from conan.internal.graph.profile_node_definer import initialize_conanfile_profile
 from conan.internal.source import config_source
@@ -94,8 +94,7 @@ def _configure_source(conan_api, hook_manager, conanfile_path, ref, remotes):
     initialize_conanfile_profile(conanfile, profile, profile, CONTEXT_HOST, False)
     # This is important, otherwise the ``conan source`` doesn't define layout and fails
     if hasattr(conanfile, "layout"):
-        with conanfile_exception_formatter(conanfile, "layout"):
-            conanfile.layout()
+        call_method(conanfile, "layout")
 
     cache = conan_api._api_helpers.cache # noqa
     recipe_layout = cache.recipe_layout(ref)

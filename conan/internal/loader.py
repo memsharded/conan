@@ -16,7 +16,7 @@ from conan.api.output import ConanOutput
 from conan.tools.cmake import cmake_layout
 from conan.tools.google import bazel_layout
 from conan.tools.microsoft import vs_layout
-from conan.internal.errors import conanfile_exception_formatter, NotFoundException
+from conan.internal.errors import call_method, conanfile_exception_formatter, NotFoundException
 from conan.errors import ConanException
 from conan.internal.model.conan_file import ConanFile
 from conan.internal.model.options import Options
@@ -52,8 +52,7 @@ class ConanFileLoader:
             except Exception:
                 pass
             return
-        with conanfile_exception_formatter(conanfile, "init"):
-            conanfile.init()
+        call_method(conanfile, "init")
 
     def load_basic_module(self, conanfile_path, graph_lock=None, display="", remotes=None,
                           update=None, check_update=None, tested_python_requires=None):
