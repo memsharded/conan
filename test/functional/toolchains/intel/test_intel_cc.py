@@ -41,15 +41,10 @@ class TestIntelCC:
         """Test Intel oneAPI icx/icpx C++ compiler with CMake."""
         client = TestClient()
         client.run("new cmake_lib -d name=hello -d version=0.1")
-        compiler_executables = (
-            'tools.build:compiler_executables={"c": "icx-cl", "cpp": "icx-cl"}'
-            if platform.system() == "Windows"
-            else ""
-        )
 
         intel_profile = textwrap.dedent(f"""
             [settings]
-            os={platform.system()}
+            os=Linux
             arch=x86_64
             compiler=intel-cc
             compiler.mode=icx
@@ -59,7 +54,6 @@ class TestIntelCC:
 
             [conf]
             tools.intel:installation_path={self.oneapi_path}
-            {compiler_executables}
         """)
 
         client.save({"intel_profile": intel_profile})
@@ -132,3 +126,50 @@ class TestIntelCC:
         assert ":: oneAPI environment initialized ::" in client.out
         assert "Hello World from SYCL device" in client.out
 
+
+@pytest.mark.tool("intel_oneapi")
+@pytest.mark.skipif(platform.system() != "Windows", reason="Only for Windows")
+class TestIntelCCWindows:
+    """Tests for Intel oneAPI C++/DPC++ compilers on Linux"""
+
+    oneapi_path = Path(tools_locations["intel_oneapi"]["2026.0"]["root"]["Windows"])
+
+    @pytest.mark.tool("cmake")
+    @pytest.mark.tool("ninja")
+    def test_intel_oneapi(self):
+        """Test Intel oneAPI icx/icpx C++ compiler with CMake."""
+        client = TestClient()
+        client.run("new cmake_exe -d name=hello -d version=0.1")
+        compiler_executables = (
+            'tools.build:compiler_executables={"c": "icx-cl", "cpp": "icx-cl"}'
+        )
+
+        intel_profile = textwrap.dedent(f"""
+            [settings]
+            os=Windows
+            arch=x86_64
+            compiler=intel-cc
+            compiler.mode=classic
+            compiler.version=2026.0
+            compiler.runtime=dynamic
+            build_type=Release
+
+            [conf]
+            tools.intel:installation_path={self.oneapi_path}
+
+            tools.cmake.cmaketoolchain:generator=Ninja
+            tools.compilation:verbosity=verbose
+        """)
+
+        client.save({"intel_profile": intel_profile})
+        client.run("build -pr:h intel_profile")
+        print(client.out)
+        assert ":: initializing oneAPI environment" in client.out
+        assert ":: oneAPI environment initialized ::" in client.out
+        assert "icx-cl.exe"
+        client.run_command(r"build\Release\hello.exe")
+        print(client.out)
+
+        assert "Hello World" in client.out
+        assert "__INTEL_LLVM_COMPILER2026" in client.out
+        assert "hello/0.1: MSVC runtime: MultiThreadedDLL" in client.out
