@@ -5,6 +5,7 @@ from multiprocessing.pool import ThreadPool
 from conan.api.output import ConanOutput, Color
 from conan.internal.methods import run_build_method, run_package_method
 from conan.internal.api.install.generators import write_generators
+from conan.internal.cache.conan_reference_layout import BUILD_FOLDER
 from conan.internal.graph.graph import (BINARY_BUILD, BINARY_CACHE, BINARY_DOWNLOAD,
                                         BINARY_EDITABLE, BINARY_UPDATE, BINARY_EDITABLE_BUILD,
                                         BINARY_SKIP)
@@ -44,10 +45,20 @@ class _PackageBuilder:
         # Build folder can use a different package_ID if build_id() is defined.
         # This function decides if the build folder should be re-used (not build again)
         # and returns the build folder
+        pref = package_layout.reference
+        external_base = conanfile.conf.get("tools.build:base_folder", check_type=str)
+        if external_base:
+            # Deterministic mode: wipe <base>/<name>/ and use it as the build root.
+            # build_id() DB reuse is intentionally bypassed here.
+            external_dir = os.path.join(external_base, pref.ref.name)
+            if os.path.exists(external_dir):
+                rmdir(external_dir)
+            conanfile.output.info(f"Using deterministic build folder: {external_dir}")
+            return os.path.join(external_dir, BUILD_FOLDER), False
+
         skip_build = False
         build_folder = package_layout.build()
         recipe_build_id = build_id(conanfile)
-        pref = package_layout.reference
         if recipe_build_id is not None and pref.package_id != recipe_build_id:
             conanfile.output.info(f"build_id() computed {recipe_build_id}")
             # check if we already have a package with the calculated build_id

@@ -88,6 +88,7 @@ BUILT_IN_CONFS = {
     "tools.build:jobs": "Default compile jobs number -jX Ninja, Make, /MP VS (default: max CPUs)",
     "tools.build:sysroot": "Pass the --sysroot=<tools.build:sysroot> flag if available. (None by default)",
     "tools.build:add_rpath_link": "Add -Wl,-rpath-link flags pointing to all lib directories for host dependencies (CMake and Meson toolchains)",
+    "tools.build:base_folder": "(Experimental) Base folder for deterministic from-source builds. When set, --build routes to <folder>/<name>/, wiped at every build. Skips build_id() DB reuse.",
     "tools.build.cross_building:can_run": "(boolean) Indicates whether is possible to run a non-native app on the same architecture. It's used by 'can_run' tool",
     "tools.build.cross_building:cross_build": "(boolean) Decides whether cross-building or not regardless of arch/OS settings. Used by 'cross_building' tool",
     "tools.build:verbosity": "Verbosity of build systems if set. Possible values are 'quiet' and 'verbose'",
