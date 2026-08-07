@@ -26,9 +26,23 @@ def conanfile_remove_attr(conanfile, names, method):
         conanfile.__class__ = original_class
 
 
-def call_method(conanfile, method):
-    with conanfile_exception_formatter(conanfile, method):
-        getattr(conanfile, method)()
+def call_method(conanfile, funcname):
+    try:
+        getattr(conanfile, funcname)()
+    except ConanInvalidConfiguration as exc:
+        # TODO: This is never called from `conanfile.validate()` but could be called from others
+        header = str(conanfile)
+        header = f"{header}: " if header else ""
+        msg = f"{header}Invalid configuration: {exc}"
+        raise ConanInvalidConfiguration(msg)
+    except Exception as exc:
+        header = str(conanfile)
+        header = f"{header}: " if header else ""
+        m = scoped_traceback(f"{header}Error in {funcname}() method", exc, scope="conanfile.py")
+        from conan.api.output import LEVEL_DEBUG, ConanOutput
+        if ConanOutput.level_allowed(LEVEL_DEBUG):
+            m = traceback.format_exc() + "\n" + m
+        raise ConanException(m)
 
 
 @contextmanager
