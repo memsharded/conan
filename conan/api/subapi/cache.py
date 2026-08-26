@@ -1,6 +1,5 @@
 import json
 import os
-import shutil
 import tarfile
 import tempfile
 
@@ -21,7 +20,7 @@ from conan.api.model import RecipeReference
 from conan.internal.api.uploader import PackagePreparator
 from conan.internal.rest.pkg_sign import PkgSignaturesPlugin
 from conan.internal.util.dates import revision_timestamp_now
-from conan.internal.util.files import rmdir, mkdir, remove, save
+from conan.internal.util.files import rmdir, mkdir, remove, save, remove_if_dirty
 
 
 class CacheAPI:
@@ -390,67 +389,70 @@ class CacheAPI:
 
         cache = PkgCache(self._conan_api.cache_folder, self._api_helpers.global_conf)
         cache_folder = cache.store  # Note, this is not the home, but the actual package cache
+        out = ConanOutput()
 
         with open(path, mode='rb') as file_handler:
             the_tar = tarfile.open(fileobj=file_handler)
-            fileobj = the_tar.extractfile("pkglist.json")
-            pkglist = fileobj.read()
             the_tar.extraction_filter = (lambda member, _: member)  # fully_trusted (Py 3.14)
-            the_tar.extractall(path=cache_folder)
-            the_tar.close()
+            pkglist = the_tar.extractfile("pkglist.json").read()
 
-        # After unzipping the files, we need to update the DB that references these files
-        out = ConanOutput()
-        package_list = PackagesList.deserialize(json.loads(pkglist))
-        for ref, packages in package_list.items():
-            ref_bundle = package_list.recipe_dict(ref)
-            ref.timestamp = revision_timestamp_now()
-            ref_bundle["timestamp"] = ref.timestamp
-            try:
-                recipe_layout = cache.recipe_layout(ref)
-            except ConanException:
-                recipe_layout = cache.create_ref_layout(ref)  # new DB folder entry
-            recipe_folder = ref_bundle["recipe_folder"]
-            rel_path = os.path.relpath(recipe_layout.base_folder, cache_folder)
-            rel_path = rel_path.replace("\\", "/")
-            # In the case of recipes, they are always "in place", so just checking it
-            assert rel_path == recipe_folder, f"{rel_path}!={recipe_folder}"
-            out.info(f"Restore: {ref} in {recipe_folder}")
-            for pref in packages:
-                pref.timestamp = revision_timestamp_now()
-                pref_bundle = package_list.package_dict(pref)
-                pref_bundle["timestamp"] = pref.timestamp
+            def _restore(archive_folder, dst_folder):
+                # Controlled unzip: the destination is always replaced by the archive contents
+                remove_if_dirty(dst_folder)  # leftover from an interrupted previous operation
+                rmdir(dst_folder)
+                prefix = archive_folder + "/"
+                dst_real = os.path.realpath(dst_folder)
+                members = []
+                for m in the_tar.getmembers():
+                    if not m.name.startswith(prefix):
+                        continue
+                    m.name = m.name[len(prefix):]
+                    target = os.path.realpath(os.path.join(dst_folder, m.name))
+                    # Reject tar members using ".." to escape the destination folder
+                    if target == dst_real or target.startswith(dst_real + os.sep):
+                        members.append(m)
+                mkdir(dst_folder)
                 try:
-                    pkg_layout = cache.pkg_layout(pref)
+                    the_tar.extractall(path=dst_folder, members=members)
+                except Exception as e:
+                    raise ConanException(f"{e}\nRestore failed, this cache is corrupted, remove "
+                                         f"it and restore it again")
+
+            package_list = PackagesList.deserialize(json.loads(pkglist))
+            for ref, packages in package_list.items():
+                ref_bundle = package_list.recipe_dict(ref)
+                ref.timestamp = revision_timestamp_now()
+                ref_bundle["timestamp"] = ref.timestamp
+                try:
+                    recipe_layout = cache.recipe_layout(ref)
                 except ConanException:
-                    pkg_layout = cache.create_pkg_layout(pref)  # DB Folder entry
-                # FIXME: This is not taking into account the existence of previous package
-                unzipped_pkg_folder = pref_bundle["package_folder"]
-                out.info(f"Restore: {pref} in {unzipped_pkg_folder}")
-                # If the DB folder entry is different to the disk unzipped one, we need to move it
-                # This happens for built (not downloaded) packages in the source "conan cache save"
-                db_pkg_folder = os.path.relpath(pkg_layout.package(), cache_folder)
-                db_pkg_folder = db_pkg_folder.replace("\\", "/")
-                if db_pkg_folder != unzipped_pkg_folder:
-                    # If a previous package exists, like a previous restore, then remove it
-                    if os.path.exists(pkg_layout.package()):
-                        shutil.rmtree(pkg_layout.package())
-                    shutil.move(os.path.join(cache_folder, unzipped_pkg_folder),
-                                pkg_layout.package())
-                    pref_bundle["package_folder"] = db_pkg_folder
-                unzipped_metadata_folder = pref_bundle.get("metadata_folder")
-                if unzipped_metadata_folder:
-                    # FIXME: Restore metadata is not incremental, but destructive
-                    out.info(f"Restore: {pref} metadata in {unzipped_metadata_folder}")
-                    db_metadata_folder = os.path.relpath(pkg_layout.metadata(), cache_folder)
-                    db_metadata_folder = db_metadata_folder.replace("\\", "/")
-                    if db_metadata_folder != unzipped_metadata_folder:
-                        # We need to put the package in the final location in the cache
-                        if os.path.exists(pkg_layout.metadata()):
-                            shutil.rmtree(pkg_layout.metadata())
-                        shutil.move(os.path.join(cache_folder, unzipped_metadata_folder),
-                                    pkg_layout.metadata())
-                        pref_bundle["metadata_folder"] = db_metadata_folder
+                    recipe_layout = cache.create_ref_layout(ref)  # new DB folder entry
+                recipe_folder = ref_bundle["recipe_folder"]
+                out.info(f"Restore: {ref} in {recipe_folder}")
+                _restore(recipe_folder, recipe_layout.base_folder)
+
+                for pref in packages:
+                    pref.timestamp = revision_timestamp_now()
+                    pref_bundle = package_list.package_dict(pref)
+                    pref_bundle["timestamp"] = pref.timestamp
+                    try:
+                        pkg_layout = cache.pkg_layout(pref)
+                    except ConanException:
+                        pkg_layout = cache.create_pkg_layout(pref)  # DB Folder entry
+                    unzipped_pkg_folder = pref_bundle["package_folder"]
+                    out.info(f"Restore: {pref} in {unzipped_pkg_folder}")
+                    unzipped_metadata_folder = pref_bundle.get("metadata_folder")
+                    if unzipped_metadata_folder:
+                        out.info(f"Restore: {pref} metadata in {unzipped_metadata_folder}")
+                        pref_bundle["metadata_folder"] = os.path.relpath(
+                            pkg_layout.metadata(), cache_folder).replace("\\", "/")
+                    # package_folder and metadata_folder share the same base folder in the
+                    # archive (e.g. "<hash>/p" and "<hash>/d/metadata"), unzip them together
+                    archive_base = unzipped_pkg_folder.rsplit("/", 1)[0]
+                    _restore(archive_base, pkg_layout.base_folder)
+                    pref_bundle["package_folder"] = os.path.relpath(
+                        pkg_layout.package(), cache_folder).replace("\\", "/")
+            the_tar.close()
 
         return package_list
 
