@@ -207,6 +207,14 @@ class RestV2Methods:
         data["files"] = list(d.replace("\\", "/") for d in data["files"].keys())
         return data
 
+    def get_recipe_snapshot(self, ref):
+        url = self.router.recipe_snapshot(ref)
+        return self._get_file_list_json(url)["files"]
+
+    def get_package_snapshot(self, pref):
+        url = self.router.package_snapshot(pref)
+        return self._get_file_list_json(url)["files"]
+
     def get_recipe(self, ref, dest_folder, metadata, only_metadata):
         url = self.router.recipe_snapshot(ref)
         data = self._get_file_list_json(url)

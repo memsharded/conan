@@ -46,7 +46,8 @@ class UploadAPI:
                                    "because upload_policy='skip'")
                 package_list.recipe_dict(ref)["packages"] = {}
 
-        UploadUpstreamChecker(self._api_helpers.remote_manager).check(package_list, remote, force)
+        UploadUpstreamChecker(self._api_helpers.remote_manager,
+                             self._api_helpers.global_conf).check(package_list, remote, force)
 
     def prepare(self, package_list: PackagesList, enabled_remotes: List[Remote],
                 metadata: List[str] = None):

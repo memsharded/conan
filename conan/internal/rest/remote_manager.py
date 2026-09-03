@@ -53,6 +53,22 @@ class RemoteManager:
         remote.invalidate_cache()
         self._call_remote(remote, "upload_package", pref, files_to_upload)
 
+    def get_recipe_snapshot(self, ref, remote):
+        # Used by the uploader to check, before force-uploading, whether the revision already
+        # has a compressed artifact in a different format on the remote
+        assert ref.revision, "get_recipe_snapshot requires RREV"
+        if self._local_folder_remote(remote) is not None:
+            return []
+        return self._call_remote(remote, "get_recipe_snapshot", ref)
+
+    def get_package_snapshot(self, pref, remote):
+        # Used by the uploader to check, before force-uploading, whether the revision already
+        # has a compressed artifact in a different format on the remote
+        assert pref.revision, "get_package_snapshot requires PREV"
+        if self._local_folder_remote(remote) is not None:
+            return []
+        return self._call_remote(remote, "get_package_snapshot", pref)
+
     def get_recipe(self, ref, remote, metadata=None):
         assert ref.revision, "get_recipe without revision specified"
         assert ref.timestamp, "get_recipe without ref.timestamp specified"

@@ -95,7 +95,13 @@ def test_unsupported_zstd():
             "for Python<3.14") in c.out
 
 
-class TestDuplicatedInServerErrors:
+class TestForceUploadDifferentCompressionFormatFails:
+    """ https://github.com/conan-io/conan/issues/20306
+    A --force upload of a revision that already exists in the remote, using a different
+    compression format, used to succeed while leaving both archives in the remote, corrupting
+    the revision, which only failed later, when someone tried to install it. It now fails
+    immediately at upload time instead, with an actionable message.
+    """
 
     def test_duplicated_export(self):
         c = TestClient(default_server_user=True)
@@ -105,13 +111,14 @@ class TestDuplicatedInServerErrors:
         c.run("upload * -r=default -c")
         c.run("remove * -c")
         c.run("export")
-        c.run("upload * -r=default -c -cc core.upload:compression_format=xz --force")
-        assert "WARN: experimental: The 'xz' compression is experimental" in c.out
+        c.run("upload * -r=default -c -cc core.upload:compression_format=xz --force",
+              assert_error=True)
+        assert ("Cannot force-upload compressed as 'xz': remote 'default' already has this "
+                "revision stored as 'conan_export.tgz'") in c.out
 
+        # The remote was never touched, the original (gz) revision is intact
         c.run("remove * -c")
-        c.run("install --requires=pkg/0.1", assert_error=True)
-        assert ("it contains more than one compressed file: "
-                "['conan_export.tgz', 'conan_export.txz']") in c.out
+        c.run("download pkg/0.1 -r=default --only-recipe")
 
     def test_duplicated_source(self):
         c = TestClient(default_server_user=True)
@@ -121,12 +128,14 @@ class TestDuplicatedInServerErrors:
         c.run("upload * -r=default -c")
         c.run("remove * -c")
         c.run("export")
-        c.run("upload * -r=default -c -cc core.upload:compression_format=xz --force")
+        c.run("upload * -r=default -c -cc core.upload:compression_format=xz --force",
+              assert_error=True)
+        assert ("Cannot force-upload compressed as 'xz': remote 'default' already has this "
+                "revision stored as 'conan_sources.tgz'") in c.out
 
+        # The remote was never touched, the original (gz) revision is intact
         c.run("remove * -c")
-        c.run("install --requires=pkg/0.1 --build=missing", assert_error=True)
-        assert ("it contains more than one compressed file: "
-                "['conan_sources.tgz', 'conan_sources.txz']") in c.out
+        c.run("download pkg/0.1 -r=default --only-recipe")
 
     def test_duplicated_package(self):
         c = TestClient(default_server_user=True)
@@ -135,9 +144,11 @@ class TestDuplicatedInServerErrors:
         c.run("upload * -r=default -c")
         c.run("remove * -c")
         c.run("create")
-        c.run("upload * -r=default -c -cc core.upload:compression_format=xz --force")
+        c.run("upload * -r=default -c -cc core.upload:compression_format=xz --force",
+              assert_error=True)
+        assert ("Cannot force-upload compressed as 'xz': remote 'default' already has this "
+                "revision stored as 'conan_package.tgz'") in c.out
 
+        # The remote was never touched, the original (gz) revision is intact
         c.run("remove * -c")
-        c.run("install --requires=pkg/0.1", assert_error=True)
-        assert ("it contains more than one compressed file: "
-                "['conan_package.tgz', 'conan_package.txz']") in c.out
+        c.run("install --requires=pkg/0.1")

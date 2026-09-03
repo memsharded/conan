@@ -40,6 +40,12 @@ class RestApiClient:
                              self._requester, self._config, self._verify_ssl,
                              checksum_deploy)
 
+    def get_recipe_snapshot(self, ref):
+        return self._get_api().get_recipe_snapshot(ref)
+
+    def get_package_snapshot(self, pref):
+        return self._get_api().get_package_snapshot(pref)
+
     def get_recipe(self, ref, dest_folder, metadata, only_metadata):
         return self._get_api().get_recipe(ref, dest_folder, metadata, only_metadata)
 

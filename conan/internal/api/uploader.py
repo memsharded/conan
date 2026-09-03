@@ -6,6 +6,7 @@ import sys
 import tarfile
 import time
 
+from conan.api.model import PkgReference
 from conan.api.output import ConanOutput
 from conan.internal.source import retrieve_exports_sources
 from conan.internal.errors import NotFoundException
@@ -25,8 +26,10 @@ class UploadUpstreamChecker:
     This is completely irrespective of the actual package contents, it only uses the local
     computed revision and the remote one
     """
-    def __init__(self, remote_manager):
+    def __init__(self, remote_manager, global_conf):
         self._remote_manager = remote_manager
+        self._compressformat = global_conf.get("core.upload:compression_format", default="gz",
+                                               choices=COMPRESSIONS)
 
     def check(self, package_list, remote, force):
         for ref, packages in package_list.items():
@@ -50,6 +53,11 @@ class UploadUpstreamChecker:
         else:
             if force:
                 output.info(f"Recipe '{ref.repr_notime()}' already in server, forcing upload")
+                server_files = self._get_remote_files(ref, remote)
+                if server_files is not None:
+                    self._check_compression_format(ref, remote, EXPORT_FILE_NAME, server_files)
+                    self._check_compression_format(ref, remote, EXPORT_SOURCES_FILE_NAME,
+                                                   server_files)
                 ref_bundle["force_upload"] = True
                 ref_bundle["upload"] = True
             else:
@@ -72,12 +80,37 @@ class UploadUpstreamChecker:
             output = ConanOutput(scope=str(pref.ref))
             if force:
                 output.info(f"Package '{pref.repr_notime()}' already in server, forcing upload")
+                server_files = self._get_remote_files(pref, remote)
+                if server_files is not None:
+                    self._check_compression_format(pref, remote, PACKAGE_FILE_NAME, server_files)
                 prev_bundle["force_upload"] = True
                 prev_bundle["upload"] = True
             else:
                 output.info(f"Package '{pref.repr_notime()}' already in server, skipping upload")
                 prev_bundle["force_upload"] = False
                 prev_bundle["upload"] = False
+
+    def _get_remote_files(self, ref, remote):
+        try:
+            if isinstance(ref, PkgReference):
+                return self._remote_manager.get_package_snapshot(ref, remote)
+            return self._remote_manager.get_recipe_snapshot(ref, remote)
+        except NotFoundException:
+            return None
+
+    def _check_compression_format(self, ref, remote, artifact, server_files):
+        matches = [f for f in server_files if f.startswith(artifact)]
+        if not matches:
+            return
+        remote_format = matches[0][len(artifact):]
+        if remote_format != self._compressformat:
+            raise ConanException(
+                f"{ref}: Cannot force-upload compressed as '{self._compressformat}': remote "
+                f"'{remote.name}' already has this revision stored as '{matches[0]}'. Uploading "
+                f"a different compression format would leave both archives on the server and "
+                f"make the revision unusable. Either use '-cc "
+                f"core.upload:compression_format={remote_format}', or remove the revision from "
+                f"the remote first if you really want to change its compression format.")
 
 
 def get_compress_level(compressformat, global_conf):
