@@ -572,3 +572,18 @@ def test_upload_to_disabled():
     assert "ERROR: Remote 'default' is disabled" in c.out
     c.run("upload * -c -r=default --allow-disabled")
     assert "tool/0.1: Uploading recipe" in c.out
+
+
+def test_server_timestamp():
+    c = TestClient(default_server_user=True, light=True)
+    files = {"conanfile.py": GenConanfile("hello", "1.0")}
+    c.save(files)
+    c.run("export .")
+    rrev = c.exported_recipe_revision()
+    c.run("list hello#* --format=json")
+    print(c.out)
+    import time
+    time.sleep(1)
+    c.run("upload * -r default -c --format=json", redirect_stdout="pkgs.json")
+    c.run("download -r default -l=pkgs.json --format=json")
+    print(c.out)

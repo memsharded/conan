@@ -48,6 +48,24 @@ class _LockRequires:
         return result
 
     def add(self, ref, package_ids=None):
+        """
+        what if we want the server revisions to be the ones?
+        Flow1 (exporting from conan-center-index fork):
+        - lockfile contain local timestamps
+        - Packages are uploaded, getting new timestamps
+        - lockfile contains timestamp no longer exists
+
+        HOW to update the conan.lock local timestamps???
+
+        Flow2 (lockfile captured from server):
+        - Lockfile contain the server timestamps
+
+        Multiple revisions in lockfile:
+        - Case1: explicit multiple requires with revisions => timestamp unnecessary
+        - Case2: mixed requires with revisions and requires without
+             The requires without can resolve to the latest.
+             That latest become the first in the lockfile
+        """
         if ref.revision is not None:
             # Timestamp doesn't affect equality/hash (see RecipeReference.__eq__), so this
             # finds the previously locked entry for the exact same revision, if any
