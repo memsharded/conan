@@ -108,18 +108,19 @@ class LockfileAPI:
         return new_lock
 
     @staticmethod
-    def update_lockfile(lockfile, graph, lock_packages=False, clean=False) -> Lockfile:
+    def update_lockfile(lockfile, graph, lock_packages=False, clean=False, keep_timestamps=True) -> Lockfile:
         """ Update the lockfile with information from the dependency graph
 
         :param lockfile: The lockfile to update. It can be None, and a new lockfile will be created.
         :param graph: The dependency graph
         :param lock_packages: Unused, do not use or define it.
         :param clean: If true, completely clean the lockfile, computing a new lockfile from graph
+        :param keep_timestamps: If revisions timestamps in existing lockfile should be maintained
         """
         if lockfile is None or clean:
             lockfile = Lockfile(graph, lock_packages)
         else:
-            lockfile.update_lock(graph, lock_packages)
+            lockfile.update_lock(graph, lock_packages, keep_timestamps=keep_timestamps)
         return lockfile
 
     @staticmethod

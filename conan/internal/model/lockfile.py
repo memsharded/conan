@@ -47,7 +47,7 @@ class _LockRequires:
                 result._requires[RecipeReference.loads(d[0])] = d[1]
         return result
 
-    def add(self, ref, package_ids=None):
+    def add(self, ref, package_ids=None, keep_timestamps=True):
         if ref.revision is not None:
             # Timestamp doesn't affect equality/hash (see RecipeReference.__eq__), so this
             # finds the previously locked entry for the exact same revision, if any
@@ -58,7 +58,7 @@ class _LockRequires:
                     assert isinstance(old_package_ids, dict)
                     old_package_ids.update(package_ids)
                 package_ids = old_package_ids
-            if old_ref is not None and old_ref.timestamp is not None:
+            if keep_timestamps and old_ref is not None and old_ref.timestamp is not None:
                 # Same revision as before: keep the timestamp it already had locked, don't
                 # let it drift to the incoming one. Otherwise, re-exporting or re-downloading
                 # the very same, unchanged revision elsewhere (which still refreshes its
@@ -137,11 +137,11 @@ class Lockfile:
 
         self.update_lock(deps_graph, lock_packages)
 
-    def update_lock(self, deps_graph, lock_packages=False):
+    def update_lock(self, deps_graph, lock_packages=False, keep_timestamps=True):
         for graph_node in deps_graph.nodes:
             try:
                 for r in graph_node.conanfile.python_requires.all_refs():
-                    self._python_requires.add(r)
+                    self._python_requires.add(r, keep_timestamps=keep_timestamps)
             except AttributeError:
                 pass
             if graph_node.recipe in (RECIPE_VIRTUAL, RECIPE_CONSUMER) or graph_node.ref is None:
@@ -150,9 +150,9 @@ class Lockfile:
 
             pids = {graph_node.package_id: graph_node.prev} if lock_packages else None
             if graph_node.context == CONTEXT_BUILD:
-                self._build_requires.add(graph_node.ref, pids)
+                self._build_requires.add(graph_node.ref, pids, keep_timestamps=keep_timestamps)
             else:
-                self._requires.add(graph_node.ref, pids)
+                self._requires.add(graph_node.ref, pids, keep_timestamps=keep_timestamps)
 
         self._alias.update(deps_graph.aliased)
         self._overrides.update(deps_graph.overrides())

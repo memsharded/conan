@@ -253,10 +253,23 @@ def test_timestamps_with_value_are_kept():
     rev = c.exported_recipe_revision()
     # Create a new lockfile, wipe the previous
     c.run(f"lock add --lockfile=\"\" --requires=math/1.0#{rev}%0.123")
+
+    # Same file: stability
     c.run("install . --lockfile=conan.lock --lockfile-out=conan.lock")
     assert f" math/1.0#{rev} - Cache" in c.out
     new_lock = c.load("conan.lock")
     assert "%0.123" in new_lock
+
+    # Different file: new one
+    c.run("install . --lockfile=conan.lock --lockfile-out=conan2.lock")
+    assert f" math/1.0#{rev} - Cache" in c.out
+    new_lock = c.load("conan2.lock")
+    assert "%0.123" not in new_lock
+
+    # but if we want to make it higher priority, we can merge it
+    c.run("lock merge --lockfile conan.lock --lockfile conan2.lock")
+    new_lock = c.load("conan.lock")
+    assert "%0.123" not in new_lock
 
 
 def test_lock_add_error():

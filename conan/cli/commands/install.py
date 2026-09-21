@@ -48,8 +48,10 @@ def install(conan_api, parser, *args):
     deps_graph, lockfile, install_error = _run_install_command(conan_api, args, cwd)
 
     # Update lockfile if necessary
+    keep_timestamps = args.lockfile == args.lockfile_out
     lockfile = conan_api.lockfile.update_lockfile(lockfile, deps_graph, args.lockfile_packages,
-                                                  clean=args.lockfile_clean)
+                                                  clean=args.lockfile_clean,
+                                                  keep_timestamps=keep_timestamps)
     conan_api.lockfile.save_lockfile(lockfile, args.lockfile_out, cwd)
     return {"graph": deps_graph,
             "conan_api": conan_api,
