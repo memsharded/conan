@@ -14,12 +14,16 @@ SERVER_EXPORT_FOLDER = "export"
 SERVER_PACKAGES_FOLDER = "package"
 
 
+def _is_plain_component(value):
+    return value not in ("", ".", "..") and "/" not in value and "\\" not in value \
+        and "\0" not in value
+
+
 def _check_component(value):
     """ Reference fields (name, version, revision, package_id...) come from the URL and are used
     to build folders in the disk, they must be a single and plain path component"""
-    if value is not None:
-        if value in ("", ".", "..") or "/" in value or "\\" in value or "\0" in value:
-            raise ForbiddenException("Invalid reference field: '%s'" % value)
+    if value is not None and not _is_plain_component(value):
+        raise ForbiddenException("Invalid reference field: '%s'" % value)
     return value
 
 
@@ -67,8 +71,8 @@ class ServerStore(object):
         # components is a valid name (e.g. metadata/a:mylogs.txt)
         if ntpath.splitdrive(filename)[0]:
             raise ForbiddenException("Invalid file path: '%s'" % filename)
-        for part in filename.split("/"):
-            _check_component(part)
+        if not all(_is_plain_component(part) for part in filename.split("/")):
+            raise ForbiddenException("Invalid file path: '%s'" % filename)
         return filename
 
     def get_recipe_file_path(self, ref, filename):
