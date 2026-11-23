@@ -1,7 +1,9 @@
+import ntpath
 import os
 from os.path import join, normpath, relpath
 
-from conan.internal.errors import RecipeNotFoundException, PackageNotFoundException
+from conan.internal.errors import RecipeNotFoundException, PackageNotFoundException, \
+    ForbiddenException
 from conan.internal.paths import CONAN_MANIFEST
 from conan.api.model import PkgReference
 from conan.api.model import RecipeReference
@@ -12,8 +14,18 @@ SERVER_EXPORT_FOLDER = "export"
 SERVER_PACKAGES_FOLDER = "package"
 
 
+def _check_component(value):
+    """ Reference fields (name, version, revision, package_id...) come from the URL and are used
+    to build folders in the disk, they must be a single and plain path component"""
+    if value is not None:
+        if value in ("", ".", "..") or "/" in value or "\\" in value or "\0" in value:
+            raise ForbiddenException("Invalid reference field: '%s'" % value)
+    return value
+
+
 def ref_dir_repr(ref):
-    return "/".join([ref.name, str(ref.version), ref.user or "_", ref.channel or "_"])
+    return "/".join(_check_component(c) for c in
+                    (ref.name, str(ref.version), ref.user or "_", ref.channel or "_"))
 
 
 class ServerStore(object):
@@ -29,7 +41,7 @@ class ServerStore(object):
     def base_folder(self, ref):
         assert ref.revision is not None, "BUG: server store needs RREV to get recipe reference"
         tmp = normpath(join(self.store, ref_dir_repr(ref)))
-        return join(tmp, ref.revision)
+        return join(tmp, _check_component(ref.revision))
 
     def conan_revisions_root(self, ref):
         """Parent folder of the conan package, for all the revisions"""
@@ -41,20 +53,29 @@ class ServerStore(object):
 
     def package(self, pref):
         assert pref.revision is not None, "BUG: server store needs PREV for package"
-        tmp = join(self.packages(pref.ref), pref.package_id)
-        return join(tmp, pref.revision)
+        tmp = join(self.packages(pref.ref), _check_component(pref.package_id))
+        return join(tmp, _check_component(pref.revision))
 
     def export(self, ref):
         return join(self.base_folder(ref), SERVER_EXPORT_FOLDER)
 
+    @staticmethod
+    def _check_filename(filename):
+        """ A client provided filename (from the URL, so "/" is always the separator) must be a
+        relative path, made of plain components, that cannot escape from its folder"""
+        # Only a leading drive ("D:foo") can make join() drop the folder, a ":" in later
+        # components is a valid name (e.g. metadata/a:mylogs.txt)
+        if ntpath.splitdrive(filename)[0]:
+            raise ForbiddenException("Invalid file path: '%s'" % filename)
+        for part in filename.split("/"):
+            _check_component(part)
+        return filename
+
     def get_recipe_file_path(self, ref, filename):
-        abspath = join(self.export(ref), filename)
-        return abspath
+        return join(self.export(ref), self._check_filename(filename))
 
     def get_package_file_path(self, pref, filename):
-        p_path = self.package(pref)
-        abspath = join(p_path, filename)
-        return abspath
+        return join(self.package(pref), self._check_filename(filename))
 
     def path_exists(self, path):
         return self._storage_adapter.path_exists(path)
@@ -207,8 +228,9 @@ class ServerStore(object):
 
     def _package_revisions_file(self, pref):
         tmp = normpath(join(self._store_folder, ref_dir_repr(pref.ref)))
-        revision = {None: ""}.get(pref.ref.revision, pref.ref.revision)
-        p_folder = join(tmp, revision, SERVER_PACKAGES_FOLDER, pref.package_id)
+        assert pref.ref.revision is not None, "BUG: server store needs RREV for package revisions"
+        p_folder = join(tmp, _check_component(pref.ref.revision), SERVER_PACKAGES_FOLDER,
+                        _check_component(pref.package_id))
         return join(p_folder, REVISIONS_FILE)
 
     def get_package_revision_time(self, pref):

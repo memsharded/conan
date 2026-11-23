@@ -2,7 +2,9 @@ import copy
 import os
 import pytest
 
-from conan.internal.errors import NotFoundException
+import io
+
+from conan.internal.errors import NotFoundException, ForbiddenException
 from conan.internal.model.manifest import FileTreeManifest
 from conan.api.model import PkgReference
 from conan.api.model import RecipeReference
@@ -124,3 +126,63 @@ class TestConanService:
         with pytest.raises(NotFoundException):
             self.service.remove_recipe(
                               RecipeReference("Fake", "1.0", "lasote", "stable"), "lasote")
+
+    @pytest.mark.parametrize("filename", ["../../../../../escaped.txt",
+                                          "sub/../../../../../../escaped.txt",
+                                          "/tmp/escaped.txt", "..", ".", "D:escaped.txt",
+                                          "//srv/share/escaped.txt"])
+    def test_upload_path_traversal(self, filename):
+        # Server upload must never create/replace files outside the package folder
+        # GHSA-qrpq-hr9g-8jq9
+        victim = os.path.join(self.tmp_dir, "victim.txt")
+        save(victim, "original")
+        evil = "../" * 40 + victim.replace("\\", "/").lstrip("/")
+        for name in (filename, evil):
+            with pytest.raises(ForbiddenException):
+                self.service.upload_recipe_file(io.BytesIO(b"REPLACED"), {}, self.ref, name, "lasote")
+            with pytest.raises(ForbiddenException):
+                self.service.upload_package_file(io.BytesIO(b"REPLACED"), {}, self.pref, name,
+                                                 "lasote")
+        with open(victim) as f:
+            assert f.read() == "original"
+        assert not os.path.exists(os.path.join(self.tmp_dir, "escaped.txt"))
+
+    def test_upload_subfolder_ok(self):
+        self.service.upload_recipe_file(io.BytesIO(b"hi"), {}, self.ref, "sub/file.txt", "lasote")
+        assert os.path.exists(os.path.join(self.server_store.export(self.ref), "sub", "file.txt"))
+
+    def test_upload_metadata_colon_name(self):
+        # metadata file names are chosen by the user, a "a:" prefix must not be taken as a drive
+        path = self.server_store.get_recipe_file_path(self.ref, "metadata/a:mylogs.txt")
+        assert path.startswith(self.server_store.export(self.ref))
+
+    def test_download_path_traversal(self):
+        with pytest.raises(ForbiddenException):
+            self.service.get_recipe_file(self.ref, "../../../../etc/passwd", "lasote")
+        with pytest.raises(ForbiddenException):
+            self.service.get_package_file(self.pref, "../../../../etc/passwd", "lasote")
+
+    @pytest.mark.parametrize("field", ["name", "version", "user", "channel", "revision"])
+    def test_reference_path_traversal(self, field):
+        # name/version/user/channel/revision come from the URL, ".." is a valid bottle segment
+        fields = dict(name="pkg", version="1.0", user="user", channel="testing", revision="1234")
+        fields[field] = ".."
+        ref = RecipeReference(**fields)
+        with pytest.raises(ForbiddenException):
+            self.service.upload_recipe_file(io.BytesIO(b"x"), {}, ref, "pwned.txt", "lasote")
+        with pytest.raises(ForbiddenException):
+            self.service.get_recipe_file(ref, "pwned.txt", "lasote")
+        if field != "revision":
+            ref.revision = None
+            with pytest.raises(ForbiddenException):
+                self.service.remove_recipe(ref, "lasote")
+
+    @pytest.mark.parametrize("field", ["package_id", "revision"])
+    def test_package_reference_path_traversal(self, field):
+        values = dict(package_id="123123123", revision="1234")
+        values[field] = ".."
+        pref = PkgReference(self.ref, values["package_id"], values["revision"])
+        with pytest.raises(ForbiddenException):
+            self.service.upload_package_file(io.BytesIO(b"x"), {}, pref, "pwned.txt", "lasote")
+        with pytest.raises(ForbiddenException):
+            self.service.get_package_file(pref, "pwned.txt", "lasote")
